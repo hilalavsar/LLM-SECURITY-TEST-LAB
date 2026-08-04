@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Environment secrets — ASLA commit etme
+.env
+*.env.local
+
+# Veritabanı / veri çıktıları
+*.sqlite
+*.db
+data/outputs/
+data/results/
+exports/
+
+# Model dosyaları (Ollama kendi yönetir, repoya girmez)
+*.gguf
+*.bin
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Colab / notebook çıktıları
+notebooks/*.ipynb_checkpoints/
+
+# Loglar
+*.log
+logs/

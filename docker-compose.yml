@@ -1,0 +1,19 @@
+# PostgreSQL — tek servis. Dashboard ve test runner buraya baglanir.
+# Calistir:  docker compose up -d
+# Durdur:    docker compose down   (veri korunur, volume sayesinde)
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: llmseclab-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-labuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-labpass}
+      POSTGRES_DB: ${POSTGRES_DB:-llmseclab}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

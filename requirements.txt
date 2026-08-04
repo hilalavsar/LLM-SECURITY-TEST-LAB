@@ -1,0 +1,22 @@
+# --- Web katmani (L5/L6) ---
+Flask==3.0.3
+Jinja2==3.1.4
+
+# --- Veritabani (Persistence) ---
+SQLAlchemy==2.0.35
+alembic==1.13.3
+psycopg2-binary==2.9.9
+
+# --- Veri dogrulama (schemas) ---
+pydantic==2.9.2
+pydantic-settings==2.5.2
+
+# --- Model runtime cagrisi (L2 adapters) ---
+requests==2.32.3
+
+# --- Yardimcilar ---
+python-dotenv==1.0.1
+PyYAML==6.0.2
+
+# --- Test ---
+pytest==8.3.3
