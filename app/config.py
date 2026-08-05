@@ -1,17 +1,33 @@
-"""Konfigurasyon — .env dosyasindan ayarlari okur.
+"""Configuration — reads settings from environment variables.
 
-Pydantic-settings ile tip guvenli. Hafta 2'de genisletilecek.
+Kept intentionally small for now; will move to pydantic-settings in Week 2.
 """
 
 from __future__ import annotations
+
 import os
+from pathlib import Path
+
+# Repo root: .../LLM-SECURITY-TEST-LAB
+ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = ROOT / "data"
+DEFENSES_DIR = DATA_DIR / "defenses"
+CORPUS_PATH = DATA_DIR / "test_cases" / "corpus_tr_v0.yaml"
+RUNS_DIR = DATA_DIR / "runs"
 
 
 class Settings:
-    """Basit baslangic; sonra pydantic-settings'e tasinacak."""
+    """Simple starter settings; env-overridable."""
+
     OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
     TARGET_MODEL_PRIMARY = os.getenv("TARGET_MODEL_PRIMARY", "qwen2.5:7b")
     TARGET_MODEL_SECONDARY = os.getenv(
         "TARGET_MODEL_SECONDARY", "llama3.1:8b-instruct-q4_K_M"
     )
-    DATABASE_URL = os.getenv("DATABASE_URL", "")
+    DATABASE_URL = os.getenv(
+        "DATABASE_URL",
+        "postgresql+psycopg2://labuser:labpass@localhost:5432/llmseclab",
+    )
+
+    # Generation defaults — fixed for reproducibility (system-prompt study).
+    GEN_OPTIONS = {"temperature": 0, "seed": 42, "num_predict": 320}

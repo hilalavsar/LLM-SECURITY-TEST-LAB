@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Test Çalıştır — LLM Security Test Lab{% endblock %}
+{% block content %}
+
+<section class="panel">
+  <h1>Yeni test çalıştır</h1>
+  <p class="muted">Bir model ve savunma seviyesi seç; saldırı corpus'u seçtiğin
+     her config'e karşı çalıştırılır ve ASR hesaplanır.</p>
+
+  {% if not ollama_up %}
+    <div class="alert">⚠️ Ollama daemon'a ulaşılamıyor. Ollama'nın çalıştığından
+       emin ol (<code>ollama serve</code>), sonra sayfayı yenile.</div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('main.run') }}" class="runform">
+    <label>Model
+      <select name="model" required>
+        {% for m in models %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+      </select>
+    </label>
+
+    <fieldset>
+      <legend>Savunma config'leri</legend>
+      {% for c in configs %}
+        <label class="check">
+          <input type="checkbox" name="configs" value="{{ c }}" checked> {{ c }}
+        </label>
+      {% endfor %}
+    </fieldset>
+
+    <button type="submit" {% if not ollama_up %}disabled{% endif %}>▶ Testi çalıştır</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Geçmiş çalıştırmalar</h2>
+  {% if runs %}
+    <table class="runs">
+      <thead><tr><th>Run ID</th><th>Model</th><th>Config'ler</th><th></th></tr></thead>
+      <tbody>
+      {% for r in runs %}
+        <tr>
+          <td class="mono">{{ r.id }}</td>
+          <td class="mono">{{ r.model }}</td>
+          <td class="mono">{{ r.configs | join(', ') }}</td>
+          <td><a href="{{ url_for('main.dashboard', run_id=r.id) }}">Dashboard →</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">Henüz çalıştırma yok.</p>
+  {% endif %}
+</section>
+
+{% endblock %}

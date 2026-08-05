@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Çalışıyor… — LLM Security Test Lab{% endblock %}
+{% block content %}
+
+<section class="panel">
+  <h1>Test çalışıyor…</h1>
+  <p class="muted">Run <span class="mono">{{ run_id }}</span> — model her saldırıyı
+     yanıtlıyor. CPU offload nedeniyle birkaç dakika sürebilir.</p>
+
+  <div class="progress-wrap">
+    <div class="progress-bar" id="bar" style="width:0%"></div>
+  </div>
+  <p id="label" class="mono">başlatılıyor…</p>
+</section>
+
+{% endblock %}
+{% block scripts %}
+<script>
+  const runId = {{ run_id | tojson }};
+  async function poll() {
+    try {
+      const r = await fetch(`/progress/${runId}/status`);
+      const s = await r.json();
+      if (s.status === "done") {
+        window.location.href = `/dashboard/${runId}`;
+        return;
+      }
+      const pct = s.total ? Math.round(100 * s.done / s.total) : 0;
+      document.getElementById("bar").style.width = pct + "%";
+      document.getElementById("label").textContent = `${s.done} / ${s.total} (${pct}%)`;
+    } catch (e) { /* keep polling */ }
+    setTimeout(poll, 2000);
+  }
+  poll();
+</script>
+{% endblock %}

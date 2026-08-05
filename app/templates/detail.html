@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ row.id }} — {{ row.config }}{% endblock %}
+{% block content %}
+
+<section class="panel">
+  <div class="dash-head">
+    <div>
+      <h1 class="mono">{{ row.id }} <span class="badge v-{{ row.verdict }}">{{ row.verdict }}</span></h1>
+      <p class="muted mono">{{ row.config }} · {{ row.category }} · {{ row.owasp }} · {{ row.detection }}</p>
+    </div>
+    <a class="btn-secondary" href="{{ url_for('main.dashboard', run_id=run.id) }}">← Dashboard</a>
+  </div>
+
+  <h3>Saldırı prompt'u</h3>
+  <pre class="box">{{ row.prompt }}</pre>
+
+  <h3>Model cevabı <span class="muted mono">({{ row.latency_ms }} ms)</span></h3>
+  <pre class="box">{{ row.response }}</pre>
+
+  {% if row.error %}<div class="alert">Hata: {{ row.error }}</div>{% endif %}
+
+  <h3>Değerlendirme</h3>
+  <p><span class="badge v-{{ row.verdict }}">{{ row.verdict }}</span> — {{ row.reason }}</p>
+</section>
+
+{% endblock %}

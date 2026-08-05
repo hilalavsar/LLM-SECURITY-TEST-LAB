@@ -1,23 +1,26 @@
-"""L2 · Model Abstraction Layer — Adapter sozlesmesi (interface).
+"""L2 · Model abstraction layer — the adapter contract (interface).
 
-Test runner sadece `generate(prompt, options)` cagirir; hangi modele
-gittigini bilmez. Priz adaptoru mantigi: her model runtime'i (Ollama,
-uzak API, mock) bu sozlesmeyi uygular.
+The runner only calls `generate(...)`; it does not know which runtime it
+talks to. Power-adapter analogy: every model runtime (Ollama, remote API,
+mock) implements this one contract.
 
-Bu dosya HENUZ BOS bir iskelet. Implementasyonu birlikte yazacagiz.
+For system-prompt testing we pass BOTH a system prompt (the defense) and a
+user prompt (the attack), so `generate` accepts an optional system_prompt.
 """
 
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 
 @dataclass
 class GenerationResult:
-    """Bir model cagrisinin ham sonucu + olcumler.
+    """Raw result of a single model call plus measurements.
 
-    Reproduksiyon icin uretim ayarlari da (options) burada saklanir.
+    Generation options are kept here too, for reproducibility.
     """
+
     text: str
     model_name: str
     latency_ms: float
@@ -26,16 +29,21 @@ class GenerationResult:
 
 
 class BaseModelAdapter(ABC):
-    """Tum adapter'larin uyacagi sozlesme."""
+    """Contract every adapter must follow."""
 
     model_name: str
 
     @abstractmethod
-    def generate(self, prompt: str, options: dict) -> GenerationResult:
-        """Prompt gonder, modelin cevabini + olcumleri dondur."""
+    def generate(
+        self,
+        user_prompt: str,
+        system_prompt: str | None = None,
+        options: dict | None = None,
+    ) -> GenerationResult:
+        """Send system+user prompts, return the model's reply and metrics."""
         raise NotImplementedError
 
     @abstractmethod
     def health_check(self) -> bool:
-        """Runtime ayakta mi? (or. Ollama daemon calisiyor mu)"""
+        """Is the runtime up? (e.g. Ollama daemon running)"""
         raise NotImplementedError

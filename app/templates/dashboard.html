@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — {{ run.id }}{% endblock %}
+{% block content %}
+
+<section class="panel">
+  <div class="dash-head">
+    <div>
+      <h1>Sonuç panosu</h1>
+      <p class="muted mono">run {{ run.id }} · model {{ run.model }}</p>
+    </div>
+    <a class="btn-secondary" href="{{ url_for('main.index') }}">＋ Yeni test</a>
+  </div>
+
+  <div class="cards">
+    {% for cname, s in run.summary.items() %}
+    <div class="card">
+      <div class="card-label mono">{{ cname }}</div>
+      <div class="card-asr">{{ s.asr }}<span>%</span></div>
+      <div class="card-sub mono">ASR · {{ s.fail }}/{{ s.decided }} FAIL · {{ s.review }} review</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="chart-box"><canvas id="asrChart"></canvas></div>
+</section>
+
+<section class="panel">
+  <h2>Senaryo sonuçları</h2>
+  <table class="results">
+    <thead><tr>
+      <th>Config</th><th>ID</th><th>Kategori</th><th>OWASP</th>
+      <th>Verdict</th><th>Latency</th><th></th>
+    </tr></thead>
+    <tbody>
+    {% for row in run.results %}
+      <tr>
+        <td class="mono">{{ row.config }}</td>
+        <td class="mono">{{ row.id }}</td>
+        <td>{{ row.category }}</td>
+        <td class="mono">{{ row.owasp }}</td>
+        <td><span class="badge v-{{ row.verdict }}">{{ row.verdict }}</span></td>
+        <td class="mono">{{ row.latency_ms }} ms</td>
+        <td><a href="{{ url_for('main.case_detail', run_id=run.id, idx=loop.index0) }}">detay →</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% endblock %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  const summary = {{ run.summary | tojson }};
+  const labels = Object.keys(summary);
+  const asr = labels.map(k => summary[k].asr);
+  new Chart(document.getElementById("asrChart"), {
+    type: "bar",
+    data: { labels, datasets: [{
+      label: "ASR (%)", data: asr,
+      backgroundColor: "#f2666f", borderRadius: 6, maxBarThickness: 90 }] },
+    options: {
+      plugins: { legend: { display: false },
+                 title: { display: true, text: "Attack Success Rate — savunma config'ine göre",
+                          color: "#e9eef7" } },
+      scales: {
+        y: { beginAtZero: true, max: 100, ticks: { color: "#97a1b7" },
+             grid: { color: "rgba(148,163,184,.12)" } },
+        x: { ticks: { color: "#97a1b7" }, grid: { display: false } }
+      }
+    }
+  });
+</script>
+{% endblock %}

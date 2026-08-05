@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Model karşılaştırma — LLM Security Test Lab{% endblock %}
+{% block content %}
+
+<section class="panel">
+  <h1>Model karşılaştırma</h1>
+  <p class="muted">Her modelin <b>en son</b> çalıştırması — savunma config'ine göre ASR (%).
+     Düşük ASR = daha dayanıklı model.</p>
+
+  {% if not data %}
+    <p class="muted">Karşılaştıracak çalıştırma yok. Önce bir test çalıştır.</p>
+  {% else %}
+    <table class="results">
+      <thead>
+        <tr><th>Model</th>{% for c in configs %}<th>{{ c }}</th>{% endfor %}<th>Run</th></tr>
+      </thead>
+      <tbody>
+      {% for model, d in data.items() %}
+        <tr>
+          <td class="mono">{{ model }}</td>
+          {% for c in configs %}
+            <td class="mono">{% if d.asr.get(c) is not none %}{{ d.asr[c] }}%{% else %}—{% endif %}</td>
+          {% endfor %}
+          <td><a href="{{ url_for('main.dashboard', run_id=d.run_id) }}">{{ d.run_id }} →</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="chart-box"><canvas id="cmpChart"></canvas></div>
+  {% endif %}
+</section>
+
+{% endblock %}
+{% block scripts %}
+{% if data %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  const configs = {{ configs | tojson }};
+  const data = {{ data | tojson }};
+  const palette = ["#28cfe6", "#f5b23e", "#4bd583", "#8b93ff", "#f2666f"];
+  const datasets = Object.keys(data).map((m, i) => ({
+    label: m,
+    backgroundColor: palette[i % palette.length],
+    borderRadius: 6,
+    data: configs.map(c => data[m].asr[c] ?? null),
+  }));
+  new Chart(document.getElementById("cmpChart"), {
+    type: "bar",
+    data: { labels: configs, datasets },
+    options: {
+      plugins: {
+        legend: { labels: { color: "#e9eef7" } },
+        title: { display: true, text: "ASR — model × savunma config", color: "#e9eef7" },
+      },
+      scales: {
+        y: { beginAtZero: true, max: 100, ticks: { color: "#97a1b7" },
+             grid: { color: "rgba(148,163,184,.12)" } },
+        x: { ticks: { color: "#97a1b7" }, grid: { display: false } },
+      },
+    },
+  });
+</script>
+{% endif %}
+{% endblock %}
