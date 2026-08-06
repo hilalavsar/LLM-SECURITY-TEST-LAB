@@ -30,6 +30,9 @@ exports/
 .vscode/
 *.iml
 
+# Claude Code local config (contains machine-specific paths)
+.claude/
+
 # OS
 .DS_Store
 Thumbs.db

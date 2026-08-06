@@ -12,7 +12,8 @@
        emin ol (<code>ollama serve</code>), sonra sayfayı yenile.</div>
   {% endif %}
 
-  <form method="post" action="{{ url_for('main.run') }}" class="runform">
+  <form method="post" action="{{ url_for('main.run') }}" class="runform"
+        onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Başlatılıyor...';">
     <label>Model
       <select name="model" required>
         {% for m in models %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
@@ -26,6 +27,16 @@
           <input type="checkbox" name="configs" value="{{ c }}" checked> {{ c }}
         </label>
       {% endfor %}
+    </fieldset>
+
+    <fieldset>
+      <legend>Dil</legend>
+      <label class="check">
+        <input type="checkbox" checked disabled> TR (her zaman çalışır)
+      </label>
+      <label class="check">
+        <input type="checkbox" name="also_en" value="1"> EN (İngilizce corpus'u da çalıştır)
+      </label>
     </fieldset>
 
     <button type="submit" {% if not ollama_up %}disabled{% endif %}>▶ Testi çalıştır</button>

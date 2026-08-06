@@ -12,8 +12,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
 DEFENSES_DIR = DATA_DIR / "defenses"
-CORPUS_PATH = DATA_DIR / "test_cases" / "corpus_tr_v0.yaml"
-RUNS_DIR = DATA_DIR / "runs"
+# Language-keyed corpus registry — used by runner to pick the right suite.
+CORPUS_PATHS = {
+    "tr": DATA_DIR / "test_cases" / "corpus_tr_v0.yaml",
+    "en": DATA_DIR / "test_cases" / "corpus_en_v0.yaml",
+}
+# Kept for backward compatibility with legacy imports.
+CORPUS_PATH = CORPUS_PATHS["tr"]
 
 
 class Settings:

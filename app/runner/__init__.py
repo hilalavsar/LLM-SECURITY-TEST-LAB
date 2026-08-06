@@ -12,7 +12,7 @@ import threading
 import time
 
 from app.adapters.ollama import OllamaAdapter
-from app.config import CORPUS_PATH, DEFENSES_DIR, Settings
+from app.config import CORPUS_PATHS, DEFENSES_DIR, Settings
 from app.db import SessionLocal
 from app.evaluator.rules import evaluate_case
 from app.models import Result, Run
@@ -31,19 +31,43 @@ def get_run(run_id: str) -> dict | None:
         return _RUNS.get(run_id)
 
 
-def start_run(model: str, config_names: list[str]) -> str:
-    run_id = time.strftime("%Y%m%d-%H%M%S")
-    suite = load_test_suite(CORPUS_PATH)
-    total = len(config_names) * len(suite.cases)
+def start_run(model: str, config_names: list[str], languages: list[str] | None = None) -> str:
+    """Kick off one or more test runs (one per language) sequentially in a thread.
+
+    Returns the FIRST run_id; a chain-run_id for the second language is created
+    inside the worker so the browser can follow both by polling the first.
+    """
+    languages = languages or ["tr"]
+    # Millisecond suffix prevents collisions on rapid double-submit.
+    ts = time.strftime("%Y%m%d-%H%M%S") + f"-{int(time.time() * 1000) % 1000:03d}"
+    run_id = f"{ts}-{languages[0]}"
+    suites = {lang: load_test_suite(CORPUS_PATHS[lang]) for lang in languages}
+    total = sum(len(config_names) * len(s.cases) for s in suites.values())
     with _LOCK:
         _RUNS[run_id] = {"id": run_id, "model": model, "status": "running",
-                         "done": 0, "total": total, "configs": config_names}
-    threading.Thread(target=_execute, args=(run_id, model, config_names, suite),
+                         "done": 0, "total": total, "configs": config_names,
+                         "languages": languages, "child_run_ids": []}
+    threading.Thread(target=_execute_multi,
+                     args=(run_id, ts, model, config_names, languages, suites),
                      daemon=True).start()
     return run_id
 
 
-def _execute(run_id: str, model: str, config_names: list[str], suite) -> None:
+def _execute_multi(run_id: str, ts: str, model: str, config_names: list[str],
+                   languages: list[str], suites: dict) -> None:
+    """Run each language as its own DB Run, sharing one progress counter."""
+    for i, lang in enumerate(languages):
+        child_id = run_id if i == 0 else f"{ts}-{lang}"
+        if i > 0:
+            with _LOCK:
+                _RUNS[run_id]["child_run_ids"].append(child_id)
+        _execute_single(run_id, child_id, model, config_names, suites[lang])
+    with _LOCK:
+        _RUNS[run_id]["status"] = "done"
+
+
+def _execute_single(progress_id: str, save_id: str, model: str,
+                    config_names: list[str], suite) -> None:
     adapter = OllamaAdapter(model, Settings.OLLAMA_HOST)
     rows: list[Result] = []
     for cname in config_names:
@@ -57,15 +81,13 @@ def _execute(run_id: str, model: str, config_names: list[str], suite) -> None:
                 verdict=verdict.value, reason=reason, prompt=case.prompt,
                 response=res.text, latency_ms=round(res.latency_ms), error=res.error))
             with _LOCK:
-                _RUNS[run_id]["done"] += 1
+                _RUNS[progress_id]["done"] += 1
 
     with SessionLocal() as s:
-        run = Run(id=run_id, model=model, configs=",".join(config_names))
+        run = Run(id=save_id, model=model, configs=",".join(config_names))
         run.results = rows
         s.add(run)
         s.commit()
-    with _LOCK:
-        _RUNS[run_id]["status"] = "done"
 
 
 # --- read helpers used by the views ---------------------------------------
@@ -110,21 +132,42 @@ def list_runs() -> list[dict]:
                 for r in runs]
 
 
-def model_comparison() -> tuple[list[str], dict]:
-    """Latest run per model -> ASR per config, for one comparison table."""
+def _lang_of(run: "Run") -> str:
+    """Derive language from run_id suffix (e.g. '-tr' / '-en'); legacy runs default to 'tr'."""
+    for lang in ("tr", "en"):
+        if run.id.endswith(f"-{lang}"):
+            return lang
+    # Fallback: sniff from a case_id prefix.
+    if run.results:
+        cid = run.results[0].case_id
+        if cid.startswith("EN-"):
+            return "en"
+    return "tr"
+
+
+def model_comparison() -> tuple[list[str], list[str], dict]:
+    """Latest run per (model, language) -> ASR per config, for the comparison table.
+
+    Returns (configs, languages, data) where data[model][lang] = {run_id, asr:{cfg:pct}}.
+    """
     with SessionLocal() as s:
         runs = s.query(Run).order_by(Run.created_at.desc()).all()
-        latest: dict[str, Run] = {}
+        latest: dict[tuple[str, str], Run] = {}
         for r in runs:
-            latest.setdefault(r.model, r)
+            latest.setdefault((r.model, _lang_of(r)), r)
         configs: list[str] = []
+        languages: list[str] = []
         data: dict[str, dict] = {}
-        for model, run in latest.items():
+        for (model, lang), run in latest.items():
             rows = [_row_to_dict(x) for x in run.results]
             cfgs = run.configs.split(",")
             summ = _summarize(rows, cfgs)
-            data[model] = {"run_id": run.id, "asr": {c: summ[c]["asr"] for c in cfgs}}
+            data.setdefault(model, {})
+            data[model][lang] = {"run_id": run.id,
+                                 "asr": {c: summ[c]["asr"] for c in cfgs}}
             for c in cfgs:
                 if c not in configs:
                     configs.append(c)
-        return sorted(configs), data
+            if lang not in languages:
+                languages.append(lang)
+        return sorted(configs), sorted(languages), data

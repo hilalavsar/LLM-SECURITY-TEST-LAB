@@ -5,24 +5,35 @@
 <section class="panel">
   <h1>Model karşılaştırma</h1>
   <p class="muted">Her modelin <b>en son</b> çalıştırması — savunma config'ine göre ASR (%).
-     Düşük ASR = daha dayanıklı model.</p>
+     Düşük ASR = daha dayanıklı model. Diller ayrı satırlarda gösterilir; TR ↔ EN farkı
+     modelin <b>çok dilli güvenlik boşluğunu</b> ortaya koyar.</p>
 
   {% if not data %}
     <p class="muted">Karşılaştıracak çalıştırma yok. Önce bir test çalıştır.</p>
   {% else %}
     <table class="results">
       <thead>
-        <tr><th>Model</th>{% for c in configs %}<th>{{ c }}</th>{% endfor %}<th>Run</th></tr>
+        <tr>
+          <th>Model</th><th>Dil</th>
+          {% for c in configs %}<th>{{ c }}</th>{% endfor %}
+          <th>Run</th>
+        </tr>
       </thead>
       <tbody>
-      {% for model, d in data.items() %}
-        <tr>
-          <td class="mono">{{ model }}</td>
-          {% for c in configs %}
-            <td class="mono">{% if d.asr.get(c) is not none %}{{ d.asr[c] }}%{% else %}—{% endif %}</td>
-          {% endfor %}
-          <td><a href="{{ url_for('main.dashboard', run_id=d.run_id) }}">{{ d.run_id }} →</a></td>
-        </tr>
+      {% for model, langs in data.items() %}
+        {% for lang in languages %}
+          {% if lang in langs %}
+          {% set d = langs[lang] %}
+          <tr>
+            {% if loop.first %}<td class="mono" rowspan="{{ langs|length }}">{{ model }}</td>{% endif %}
+            <td class="mono"><b>{{ lang | upper }}</b></td>
+            {% for c in configs %}
+              <td class="mono">{% if d.asr.get(c) is not none %}{{ d.asr[c] }}%{% else %}—{% endif %}</td>
+            {% endfor %}
+            <td><a href="{{ url_for('main.dashboard', run_id=d.run_id) }}">{{ d.run_id }} →</a></td>
+          </tr>
+          {% endif %}
+        {% endfor %}
       {% endfor %}
       </tbody>
     </table>
@@ -37,21 +48,31 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
   const configs = {{ configs | tojson }};
+  const languages = {{ languages | tojson }};
   const data = {{ data | tojson }};
-  const palette = ["#28cfe6", "#f5b23e", "#4bd583", "#8b93ff", "#f2666f"];
-  const datasets = Object.keys(data).map((m, i) => ({
-    label: m,
-    backgroundColor: palette[i % palette.length],
-    borderRadius: 6,
-    data: configs.map(c => data[m].asr[c] ?? null),
-  }));
+  const palette = ["#28cfe6", "#f5b23e", "#4bd583", "#8b93ff", "#f2666f", "#c084fc"];
+  // One dataset per (model, language) combination.
+  const datasets = [];
+  let i = 0;
+  Object.keys(data).forEach(m => {
+    languages.forEach(lang => {
+      if (!data[m][lang]) return;
+      datasets.push({
+        label: `${m} · ${lang.toUpperCase()}`,
+        backgroundColor: palette[i % palette.length],
+        borderRadius: 6,
+        data: configs.map(c => data[m][lang].asr[c] ?? null),
+      });
+      i++;
+    });
+  });
   new Chart(document.getElementById("cmpChart"), {
     type: "bar",
     data: { labels: configs, datasets },
     options: {
       plugins: {
         legend: { labels: { color: "#e9eef7" } },
-        title: { display: true, text: "ASR — model × savunma config", color: "#e9eef7" },
+        title: { display: true, text: "ASR — model × dil × savunma config", color: "#e9eef7" },
       },
       scales: {
         y: { beginAtZero: true, max: 100, ticks: { color: "#97a1b7" },

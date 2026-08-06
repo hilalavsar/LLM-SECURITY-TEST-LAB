@@ -34,7 +34,11 @@ def run():
     configs = request.form.getlist("configs")
     if not model or not configs:
         return redirect(url_for("main.index"))
-    run_id = runner.start_run(model, configs)
+    # TR always runs; EN is opt-in via checkbox.
+    languages = ["tr"]
+    if request.form.get("also_en"):
+        languages.append("en")
+    run_id = runner.start_run(model, configs, languages)
     return redirect(url_for("main.progress", run_id=run_id))
 
 
@@ -53,8 +57,9 @@ def progress_status(run_id):
 
 @bp.route("/compare")
 def compare():
-    configs, data = runner.model_comparison()
-    return render_template("compare.html", configs=configs, data=data)
+    configs, languages, data = runner.model_comparison()
+    return render_template("compare.html", configs=configs,
+                           languages=languages, data=data)
 
 
 @bp.route("/dashboard/<run_id>")

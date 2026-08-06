@@ -26,7 +26,8 @@
         return;
       }
       const pct = s.total ? Math.round(100 * s.done / s.total) : 0;
-      document.getElementById("bar").style.width = pct + "%";
+      const barPct = Math.min(pct, 100);
+      document.getElementById("bar").style.width = barPct + "%";
       document.getElementById("label").textContent = `${s.done} / ${s.total} (${pct}%)`;
     } catch (e) { /* keep polling */ }
     setTimeout(poll, 2000);
