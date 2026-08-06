@@ -193,5 +193,5 @@ run.py                Flask dev entry point
 
 Şu ana kadar: **3 model × 2 dil × 3 config = 6 run, 162 model çağrısı.**
 Detaylı ASR matrisi ve grafikler için uygulamayı ayağa kaldırıp `/compare`
-sayfasına bak.
+sayfasına bknz.
 
