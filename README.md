@@ -182,10 +182,8 @@ run.py                Flask dev entry point
 ## Gelecek çalışmalar
 
 - **Judge sistemi**: REVIEW verdikt'leri şu an insan yorumuna kalıyor.
-  Küçük fine-tuned bir judge modeli planlı; etiketleme
+  Küçük fine-tuned bir judge modeli planlıyorum; etiketleme
   `data/judge_training/judge_labeling_seed.csv` içinde ilerliyor
-- **Corpus büyüklüğü**: n=9 küçük, denominator zayıf. Judge oranını
-  azaltıp string_match ağırlıklandırarak n=15-20'ye çıkarılacak
 - **TR-native model karşılaştırması**: Trendyol / Cosmos LLM
   Ollama registry'sinde ya da HF GGUF olarak çekilecek
 
