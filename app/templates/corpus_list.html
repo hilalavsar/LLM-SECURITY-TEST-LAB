@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Corpus — LLM Security Test Lab{% endblock %}
+{% block content %}
+
+<section class="panel">
+  <h1>Saldırı corpus'u</h1>
+  <p class="muted">
+    Toplam <b>{{ total_tr + total_en }}</b> senaryo
+    ({{ total_tr }} TR + {{ total_en }} EN), 5 kategori.
+    Bir senaryoya tıkla → seçtiğin model ve config'e karşı canlı test et,
+    verdikt'i gör.
+  </p>
+
+  <div class="corpus-tabs">
+    <button class="corpus-tab-btn active" data-lang="tr">TR corpus ({{ total_tr }})</button>
+    <button class="corpus-tab-btn" data-lang="en">EN corpus ({{ total_en }})</button>
+  </div>
+
+  <div class="corpus-lang-block" data-lang="tr">
+    {% for category, cases in grouped_tr.items() %}
+      <h3 class="corpus-category">
+        {{ category }} <span class="muted mono">({{ cases|length }} senaryo)</span>
+      </h3>
+      <div class="corpus-grid">
+        {% for c in cases %}
+          <a class="corpus-card" href="{{ url_for('main.corpus_case', lang='tr', case_id=c.id) }}">
+            <div class="corpus-id mono">{{ c.id }}</div>
+            <div class="corpus-tech">{{ c.technique }}</div>
+            <div class="corpus-meta">
+              <span class="sev sev-{{ c.severity.value }}">{{ c.severity.value }}</span>
+              <span class="tag mono">{{ c.owasp.value }}</span>
+              <span class="tag mono">{{ c.detection_method.value }}</span>
+            </div>
+          </a>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="corpus-lang-block" data-lang="en" hidden>
+    {% for category, cases in grouped_en.items() %}
+      <h3 class="corpus-category">
+        {{ category }} <span class="muted mono">({{ cases|length }} senaryo)</span>
+      </h3>
+      <div class="corpus-grid">
+        {% for c in cases %}
+          <a class="corpus-card" href="{{ url_for('main.corpus_case', lang='en', case_id=c.id) }}">
+            <div class="corpus-id mono">{{ c.id }}</div>
+            <div class="corpus-tech">{{ c.technique }}</div>
+            <div class="corpus-meta">
+              <span class="sev sev-{{ c.severity.value }}">{{ c.severity.value }}</span>
+              <span class="tag mono">{{ c.owasp.value }}</span>
+              <span class="tag mono">{{ c.detection_method.value }}</span>
+            </div>
+          </a>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+{% endblock %}
+{% block scripts %}
+<script>
+  document.querySelectorAll('.corpus-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const lang = btn.dataset.lang;
+      document.querySelectorAll('.corpus-tab-btn').forEach(b =>
+        b.classList.toggle('active', b === btn));
+      document.querySelectorAll('.corpus-lang-block').forEach(block => {
+        block.hidden = block.dataset.lang !== lang;
+      });
+    });
+  });
+</script>
+{% endblock %}

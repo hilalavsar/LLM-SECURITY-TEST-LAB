@@ -6,7 +6,14 @@
   <div class="dash-head">
     <div>
       <h1>Sonuç panosu</h1>
-      <p class="muted mono">run {{ run.id }} · model {{ run.model }}</p>
+      <p class="muted mono">
+        run {{ run.id }} · model {{ run.model }} ·
+        {% if run.judge_model %}
+          judge <span title="{{ run.judge_model }}">✓</span>
+        {% else %}
+          judge yok
+        {% endif %}
+      </p>
     </div>
     <a class="btn-secondary" href="{{ url_for('main.index') }}">＋ Yeni test</a>
   </div>
@@ -16,12 +23,87 @@
     <div class="card">
       <div class="card-label mono">{{ cname }}</div>
       <div class="card-asr">{{ s.asr }}<span>%</span></div>
-      <div class="card-sub mono">ASR · {{ s.fail }}/{{ s.decided }} FAIL · {{ s.review }} review</div>
+      <div class="card-sub mono">ASR · {{ s.fail }}/{{ s.decided }} FAIL · {{ s.pending }} pending</div>
     </div>
     {% endfor %}
   </div>
 
   <div class="chart-box"><canvas id="asrChart"></canvas></div>
+
+  {# ============ Judge impact info box ============ #}
+  <div class="judge-box">
+    <div class="judge-box-head">
+      <span class="judge-box-label">Judge etkisi</span>
+      {% if run.judge_model %}
+        <span class="mono" style="color:var(--pass)">judge açıktı</span>
+        <span class="muted mono">— {{ run.judge_model }}</span>
+      {% else %}
+        <span class="mono" style="color:var(--muted)">judge kapalıydı</span>
+      {% endif %}
+    </div>
+
+    {% set js = run.judge_stats %}
+    {% if run.judge_model %}
+      <p>
+        Judge <b>{{ js.judge_touched }}</b> case'i değerlendirmeye çalıştı.
+        <b>{{ js.judge_decided }}</b> tanesini karara bağladı
+        ({{ js.judge_pass }} PASS, {{ js.judge_fail }} FAIL).
+        {% if js.judge_unparseable > 0 %}
+          <b>{{ js.judge_unparseable }}</b> tanesinde meta-refusal /
+          format hatası olduğu için PENDING olarak kaldı.
+        {% endif %}
+        {% if js.judge_error > 0 %}
+          <b>{{ js.judge_error }}</b> teknik hata (timeout vb).
+        {% endif %}
+        {% if js.manual > 0 %}
+          <b>{{ js.manual }}</b> case elle finalize edildi.
+        {% endif %}
+      </p>
+      <p class="muted" style="font-size:.85rem">
+        Rule-based karar: {{ js.rule_pass }} PASS + {{ js.rule_fail }} FAIL
+        (plaintext canary veya indicator eşleşmesi ile).
+      </p>
+    {% else %}
+      <p>
+        Bu run judge'sız çalıştırıldı. Kural tabanlı değerlendirme
+        <b>{{ js.rule_pass + js.rule_fail }}</b> case'i karara bağladı
+        ({{ js.rule_pass }} PASS, {{ js.rule_fail }} FAIL).
+        <b>{{ js.rule_pending_no_judge }}</b> semantik case ise judge olmadan
+        karar verilemedi (PENDING).
+      </p>
+      {% if js.rule_pending_no_judge > 0 %}
+        <p class="muted" style="font-size:.85rem">
+          → Detay sayfalarından elle PASS/FAIL karara bağlayabilir veya
+          aşağıdaki panelden judge ile yeniden değerlendirebilirsin.
+        </p>
+      {% endif %}
+    {% endif %}
+  </div>
+
+  {# ============ Re-evaluate with different judge ============ #}
+  <div class="reeval-box">
+    <div class="judge-box-label">Farklı judge ile yeniden değerlendir</div>
+    <p class="muted" style="font-size:.88rem">
+      Model cevapları aynen kalır (deterministik). Sadece değerlendirici
+      değiştirilir ve <b>yeni bir run</b> olarak kaydedilir — bu run
+      dokunulmaz. Süre: ~1-2 dk (sadece semantik case'ler için judge çağrısı).
+    </p>
+    <form method="post" action="{{ url_for('main.re_evaluate', run_id=run.id) }}"
+          class="reeval-form"
+          onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Yeniden değerlendiriliyor... (1-2 dk)';">
+      <select name="judge_model">
+        <option value="">Yok — semantik case'ler PENDING kalır</option>
+        {% for opt in judge_options %}
+          <option value="{{ opt.value }}"
+                  {% if opt.value == default_judge and not run.judge_model %}selected{% endif %}
+                  {% if opt.value == run.judge_model %}selected{% endif %}>
+            {{ opt.label }}{% if opt.value == default_judge %} · varsayılan{% endif %}
+          </option>
+        {% endfor %}
+      </select>
+      <button type="submit">🔄 Yeniden değerlendir</button>
+    </form>
+  </div>
 </section>
 
 <section class="panel">

@@ -1,7 +1,7 @@
 :root{
   --bg:#0a0e18; --panel:#111726; --line:rgba(148,163,184,.14);
   --text:#e9eef7; --muted:#97a1b7; --accent:#28cfe6;
-  --pass:#4bd583; --fail:#f2666f; --review:#f5b23e; --error:#6b7690;
+  --pass:#4bd583; --fail:#f2666f; --pending:#f5b23e; --error:#6b7690;
   --mono:ui-monospace,"Cascadia Code","JetBrains Mono",Consolas,monospace;
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
 }
@@ -34,6 +34,20 @@ h3{margin:20px 0 8px;font-size:.95rem;color:var(--muted);text-transform:uppercas
 fieldset{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:0}
 legend{padding:0 6px;font-size:.85rem;color:var(--muted)}
 .check{flex-direction:row!important;align-items:center;gap:8px;font-family:var(--mono);color:var(--text)!important}
+.config-check{align-items:flex-start!important;padding:4px 0}
+.config-check input{margin-top:5px}
+.config-check .cfg-label{font-family:var(--sans);font-weight:700;color:var(--text);display:inline-block}
+.config-check .cfg-name{font-family:var(--mono);font-size:.72rem;color:var(--muted);margin-left:8px}
+.config-check .cfg-desc{display:block;font-family:var(--sans);font-size:.78rem;color:var(--muted);margin-top:3px;line-height:1.4}
+
+/* Two-column layout for TR / EN defense configs */
+.cfg-hint{font-size:.82rem;margin:0 0 12px}
+.cfg-two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media (max-width: 640px){.cfg-two-col{grid-template-columns:1fr}}
+.cfg-col{display:flex;flex-direction:column;gap:8px;padding:12px;
+  background:rgba(148,163,184,.04);border:1px solid var(--line);border-radius:8px}
+.cfg-col-head{font-size:10.5px;letter-spacing:.1em;color:var(--muted);
+  padding-bottom:6px;border-bottom:1px solid var(--line);margin-bottom:4px}
 button,.btn-secondary{cursor:pointer;font-weight:700;border-radius:9px;padding:11px 18px;
   border:none;background:var(--accent);color:#04121a;font-size:.95rem}
 button:disabled{opacity:.45;cursor:not-allowed}
@@ -47,7 +61,7 @@ th{color:var(--muted);font-weight:600;font-size:.78rem;text-transform:uppercase;
 .badge{font-family:var(--mono);font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px;letter-spacing:.03em}
 .v-PASS{background:rgba(75,213,131,.16);color:var(--pass)}
 .v-FAIL{background:rgba(242,102,111,.16);color:var(--fail)}
-.v-REVIEW{background:rgba(245,178,62,.16);color:var(--review)}
+.v-PENDING{background:rgba(245,178,62,.16);color:var(--pending)}
 .v-ERROR{background:rgba(107,118,144,.2);color:var(--error)}
 
 .dash-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px}
@@ -64,3 +78,103 @@ th{color:var(--muted);font-weight:600;font-size:.78rem;text-transform:uppercase;
 
 .box{background:#0a0e18;border:1px solid var(--line);border-radius:10px;padding:14px 16px;
   white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:.85rem;line-height:1.5}
+
+/* PENDING manual-finalize panel on the detail page */
+.finalize-panel{margin-top:22px;padding:18px 20px;background:#0a0e18;
+  border:1px solid var(--line);border-left:3px solid var(--pending);border-radius:8px}
+.finalize-panel h3{margin-top:0;color:var(--pending)}
+.finalize-form{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.finalize-form button{padding:10px 16px;font-family:var(--mono);font-size:.9rem;
+  font-weight:600;border:none;border-radius:8px;cursor:pointer;color:#04121a}
+.finalize-form .btn-pass{background:var(--pass)}
+.finalize-form .btn-fail{background:var(--fail)}
+.finalize-form .btn-error{background:var(--error);color:#e9eef7}
+.finalize-form button:hover{opacity:.85}
+
+/* ============ Corpus browser ============ */
+
+/* Tabs (TR / EN switcher) */
+.corpus-tabs{display:flex;gap:8px;margin:18px 0 22px;border-bottom:1px solid var(--line)}
+.corpus-tab-btn{background:transparent;color:var(--muted);border:none;
+  padding:10px 18px;font-family:var(--mono);font-size:.85rem;font-weight:600;
+  cursor:pointer;border-bottom:2px solid transparent;letter-spacing:.03em;border-radius:0}
+.corpus-tab-btn:hover{color:var(--text)}
+.corpus-tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* Category header inside a language block */
+.corpus-category{margin:22px 0 12px;font-family:var(--mono);color:var(--text);
+  font-size:.95rem;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+
+/* Grid of scenario cards */
+.corpus-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));
+  gap:12px;margin-bottom:20px}
+.corpus-card{display:block;padding:14px 16px;background:#0a0e18;border:1px solid var(--line);
+  border-radius:10px;text-decoration:none;color:var(--text);transition:border-color .15s,transform .1s}
+.corpus-card:hover{border-color:var(--accent);text-decoration:none;transform:translateY(-1px)}
+.corpus-id{font-size:.9rem;font-weight:700;color:var(--accent);margin-bottom:4px}
+.corpus-tech{font-size:.82rem;color:var(--text);margin-bottom:10px;line-height:1.35}
+.corpus-meta{display:flex;flex-wrap:wrap;gap:6px}
+
+/* Severity chips (used on corpus cards + case header) */
+.sev{display:inline-block;padding:2px 8px;border-radius:99px;
+  font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase}
+.sev-low{background:rgba(75,213,131,.16);color:var(--pass)}
+.sev-medium{background:rgba(245,178,62,.16);color:var(--pending)}
+.sev-high{background:rgba(242,102,111,.16);color:var(--fail)}
+.sev-critical{background:rgba(242,102,111,.28);color:#ff8a92}
+
+/* Small meta tags on cards */
+.tag{display:inline-block;padding:2px 8px;border-radius:99px;
+  background:rgba(148,163,184,.12);color:var(--muted);font-size:10.5px;letter-spacing:.03em}
+
+/* Clean bulletless list (indicators, notes) */
+.clean-list{list-style:none;padding:0;margin:8px 0}
+.clean-list li{padding:6px 12px;background:rgba(148,163,184,.08);
+  border-left:2px solid var(--accent);border-radius:4px;margin-bottom:4px;font-size:.85rem}
+
+/* Live test result area on the case detail page */
+.test-result{margin-top:22px;padding:18px 20px;background:#0a0e18;
+  border:1px solid var(--line);border-radius:8px}
+.test-status{margin-bottom:12px;font-size:.85rem}
+.test-verdict{margin:6px 0 4px}
+.test-verdict .badge{font-size:14px;padding:5px 14px}
+.test-reason{font-size:.9rem;margin:0 0 10px}
+
+/* ============ Judge impact info box on dashboard ============ */
+.judge-box{margin-top:22px;padding:16px 20px;background:#0a0e18;
+  border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:8px}
+.judge-box-head{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.judge-box-label{font-family:var(--mono);font-size:11px;text-transform:uppercase;
+  letter-spacing:.08em;color:var(--accent);font-weight:700}
+.judge-box p{margin:6px 0}
+.judge-box p:last-child{margin-bottom:0}
+
+/* Re-evaluate panel below the judge-impact box */
+.reeval-box{margin-top:14px;padding:16px 20px;background:#0a0e18;
+  border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:8px}
+.reeval-box p{margin:6px 0 12px}
+.reeval-form{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.reeval-form select{flex:1;min-width:260px;padding:9px 11px;background:#0a0e18;
+  color:var(--text);border:1px solid var(--line);border-radius:9px;font-family:var(--mono);font-size:.85rem}
+.reeval-form button{padding:10px 18px;font-family:var(--sans);font-size:.9rem;
+  font-weight:700;border:none;border-radius:9px;cursor:pointer;
+  background:var(--accent);color:#04121a}
+.reeval-form button:hover{opacity:.88}
+.reeval-form button:disabled{opacity:.5;cursor:not-allowed}
+
+/* ============ Judge impact pairs on /compare ============ */
+.pair-block{margin:20px 0;padding:16px 20px;background:#0a0e18;
+  border:1px solid var(--line);border-radius:10px}
+.pair-head{display:flex;justify-content:space-between;align-items:baseline;
+  gap:16px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:10px;
+  border-bottom:1px solid var(--line)}
+.pair-head h3{margin:0;font-size:1rem;color:var(--text);text-transform:none;letter-spacing:0}
+.pair-links{display:flex;gap:14px;font-size:.82rem}
+.pair-links a{color:var(--accent);text-decoration:none}
+.pair-links a:hover{text-decoration:underline}
+.pair-table{width:100%;border-collapse:collapse;font-size:.88rem}
+.pair-table th{color:var(--muted);font-weight:600;font-size:.72rem;
+  text-transform:uppercase;letter-spacing:.05em;text-align:left;
+  padding:8px 10px;border-bottom:1px solid var(--line)}
+.pair-table td{padding:8px 10px;border-bottom:1px solid var(--rule-soft, rgba(148,163,184,.08))}
+.pair-table tr:last-child td{border-bottom:none}

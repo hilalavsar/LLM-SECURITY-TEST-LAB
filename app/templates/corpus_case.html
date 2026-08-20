@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}{{ case.id }} — Corpus detay{% endblock %}
+{% block content %}
+
+<section class="panel">
+  <div class="dash-head">
+    <div>
+      <h1 class="mono">
+        {{ case.id }}
+        <span class="sev sev-{{ case.severity.value }}">{{ case.severity.value }}</span>
+      </h1>
+      <p class="muted mono">
+        {{ lang | upper }} · {{ case.category.value }} · {{ case.technique }} ·
+        {{ case.owasp.value }} · {{ case.atlas_tactic }} · {{ case.detection_method.value }}
+      </p>
+    </div>
+    <a class="btn-secondary" href="{{ url_for('main.corpus_list') }}">← Corpus</a>
+  </div>
+
+  <h3>Saldırı prompt'u</h3>
+  <pre class="box">{{ case.prompt }}</pre>
+
+  <h3>Beklenen güvenli davranış</h3>
+  <p class="muted">{{ case.expected_safe_behavior }}</p>
+
+  {% if case.failure_indicators %}
+    <h3>Failure indicators (rule-based tespit için)</h3>
+    <ul class="clean-list">
+      {% for i in case.failure_indicators %}
+        <li class="mono">{{ i }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  {% if case.notes %}
+    <h3>Not</h3>
+    <p class="muted">{{ case.notes }}</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Canlı test</h2>
+  <p class="muted">
+    Bir model ve savunma config'i seç → saldırı gönderilir → verdikt döner.
+    Sonuç DB'ye kaydedilmez (bu tek seferlik keşif içindir).
+  </p>
+
+  <form id="testForm" class="runform">
+    <label>Model
+      <select name="model" required>
+        {% for m in models %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Savunma config
+      <select name="config" required>
+        {% for c in configs %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+      </select>
+    </label>
+    <button type="submit" id="runBtn">▶ Saldırıyı çalıştır</button>
+  </form>
+
+  <div id="testResult" class="test-result" hidden>
+    <div id="testStatus" class="test-status mono muted"></div>
+    <div id="testVerdict" class="test-verdict"></div>
+    <p id="testReason" class="test-reason muted"></p>
+    <div id="testResponseWrap" hidden>
+      <h3>Model cevabı</h3>
+      <pre id="testResponse" class="box"></pre>
+    </div>
+  </div>
+</section>
+
+{% endblock %}
+{% block scripts %}
+<script>
+  const form = document.getElementById('testForm');
+  const btn = document.getElementById('runBtn');
+  const result = document.getElementById('testResult');
+  const statusEl = document.getElementById('testStatus');
+  const verdictEl = document.getElementById('testVerdict');
+  const reasonEl = document.getElementById('testReason');
+  const respWrap = document.getElementById('testResponseWrap');
+  const respEl = document.getElementById('testResponse');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    btn.disabled = true;
+    btn.textContent = 'Çalışıyor...';
+    result.hidden = false;
+    statusEl.textContent = 'Model çağrılıyor... judge case ise +5-15s ekstra sürebilir.';
+    verdictEl.innerHTML = '';
+    reasonEl.textContent = '';
+    respWrap.hidden = true;
+    respEl.textContent = '';
+
+    try {
+      const url = `/corpus/{{ lang }}/{{ case.id }}/test`;
+      const r = await fetch(url, { method: 'POST', body: fd });
+      const data = await r.json();
+      if (data.error) {
+        statusEl.textContent = '❌ Hata: ' + data.error;
+        return;
+      }
+      statusEl.textContent = `✓ Bitti — ${data.latency_ms} ms`;
+      verdictEl.innerHTML =
+        `<span class="badge v-${data.verdict}">${data.verdict}</span>`;
+      reasonEl.textContent = data.reason || '';
+      respEl.textContent = data.response || '(boş cevap)';
+      respWrap.hidden = false;
+    } catch (err) {
+      statusEl.textContent = '❌ Ağ hatası: ' + err.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '▶ Saldırıyı çalıştır';
+    }
+  });
+</script>
+{% endblock %}

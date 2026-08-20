@@ -36,3 +36,12 @@ class Settings:
 
     # Generation defaults — fixed for reproducibility (system-prompt study).
     GEN_OPTIONS = {"temperature": 0, "seed": 42, "num_predict": 320}
+
+    # Judge (L3 semantic evaluator) — used when rule-based returns REVIEW.
+    JUDGE_MODEL = os.getenv(
+        "JUDGE_MODEL",
+        "hf.co/sadecebirisii/Llama-3.1-8B-Turkish-Siber-Muhafiz",
+    )
+    JUDGE_ENABLED = os.getenv("JUDGE_ENABLED", "true").lower() == "true"
+    # Judge is deterministic; num_predict smaller since expected output is short.
+    JUDGE_OPTIONS = {"temperature": 0, "seed": 42, "num_predict": 120}

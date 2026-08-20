@@ -12,8 +12,8 @@
        emin ol (<code>ollama serve</code>), sonra sayfayı yenile.</div>
   {% endif %}
 
-  <form method="post" action="{{ url_for('main.run') }}" class="runform"
-        onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Başlatılıyor...';">
+  <form method="post" action="{{ url_for('main.run') }}" class="runform" id="runform"
+        onsubmit="return validateAndDisable(this);">
     <label>Model
       <select name="model" required>
         {% for m in models %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
@@ -21,39 +21,92 @@
     </label>
 
     <fieldset>
-      <legend>Savunma config'leri</legend>
-      {% for c in configs %}
-        <label class="check">
-          <input type="checkbox" name="configs" value="{{ c }}" checked> {{ c }}
-        </label>
-      {% endfor %}
+      <legend>Savunma seviyeleri (en az bir tanesi)</legend>
+      <p class="cfg-hint muted">
+        Türkçe ve İngilizce savunma prompt'ları ayrı kolonda. 2×2 deney için
+        her ikisinden de seçebilirsin.
+      </p>
+      <div class="cfg-two-col">
+        <div class="cfg-col">
+          <div class="cfg-col-head mono">🇹🇷 TÜRKÇE</div>
+          {% for c in configs_by_lang.tr %}
+            <label class="check config-check">
+              <input type="checkbox" name="configs" value="{{ c.name }}" checked>
+              <span>
+                <span class="cfg-label">{{ c.label }}</span>
+                <span class="cfg-name">{{ c.name }}</span>
+                {% if c.desc %}<span class="cfg-desc">{{ c.desc }}</span>{% endif %}
+              </span>
+            </label>
+          {% endfor %}
+        </div>
+        <div class="cfg-col">
+          <div class="cfg-col-head mono">🇬🇧 ENGLISH</div>
+          {% for c in configs_by_lang.en %}
+            <label class="check config-check">
+              <input type="checkbox" name="configs" value="{{ c.name }}">
+              <span>
+                <span class="cfg-label">{{ c.label }}</span>
+                <span class="cfg-name">{{ c.name }}</span>
+                {% if c.desc %}<span class="cfg-desc">{{ c.desc }}</span>{% endif %}
+              </span>
+            </label>
+          {% endfor %}
+        </div>
+      </div>
     </fieldset>
 
     <fieldset>
-      <legend>Dil</legend>
+      <legend>Dil (en az bir tanesi)</legend>
       <label class="check">
-        <input type="checkbox" checked disabled> TR (her zaman çalışır)
+        <input type="checkbox" name="lang" value="tr" checked> Türkçe corpus
       </label>
       <label class="check">
-        <input type="checkbox" name="also_en" value="1"> EN (İngilizce corpus'u da çalıştır)
+        <input type="checkbox" name="lang" value="en"> İngilizce corpus
       </label>
     </fieldset>
 
+    <label>Yorumlayıcı (judge) modeli
+      <select name="judge_model">
+        <option value="">Yok — semantik case'ler PENDING kalır (manuel karar)</option>
+        {% for opt in judge_options %}
+          <option value="{{ opt.value }}" {% if opt.value == default_judge %}selected{% endif %}>
+            {{ opt.label }}{% if opt.value == default_judge %} · varsayılan{% endif %}
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+
     <button type="submit" {% if not ollama_up %}disabled{% endif %}>▶ Testi çalıştır</button>
   </form>
+
+  <p class="muted" style="margin-top:18px;font-size:0.88rem">
+    <b>Not:</b> Judge, kural tabanlı değerlendiricinin karar veremediği semantik
+    case'ler (jailbreak persona, JSON leak vb.) için çağrılır. "Yok" seçersen
+    bu case'ler PENDING kalır ve detay sayfasından elle karara bağlanır.
+  </p>
 </section>
 
 <section class="panel">
   <h2>Geçmiş çalıştırmalar</h2>
   {% if runs %}
     <table class="runs">
-      <thead><tr><th>Run ID</th><th>Model</th><th>Config'ler</th><th></th></tr></thead>
+      <thead><tr>
+        <th>Run ID</th><th>Model</th><th>Config'ler</th><th>Judge</th><th></th>
+      </tr></thead>
       <tbody>
       {% for r in runs %}
         <tr>
           <td class="mono">{{ r.id }}</td>
           <td class="mono">{{ r.model }}</td>
           <td class="mono">{{ r.configs | join(', ') }}</td>
+          <td class="mono">
+            {% if r.judge_model %}
+              <span class="tag mono" title="{{ r.judge_model }}">judge ✓</span>
+            {% else %}
+              <span class="tag mono" style="color:var(--muted)">yok</span>
+            {% endif %}
+          </td>
           <td><a href="{{ url_for('main.dashboard', run_id=r.id) }}">Dashboard →</a></td>
         </tr>
       {% endfor %}
@@ -64,4 +117,24 @@
   {% endif %}
 </section>
 
+{% endblock %}
+{% block scripts %}
+<script>
+  function validateAndDisable(form) {
+    const configCount = form.querySelectorAll('input[name="configs"]:checked').length;
+    const langCount = form.querySelectorAll('input[name="lang"]:checked').length;
+    if (configCount === 0) {
+      alert('En az bir savunma seviyesi seçmelisin.');
+      return false;
+    }
+    if (langCount === 0) {
+      alert('En az bir dil seçmelisin (Türkçe ya da İngilizce).');
+      return false;
+    }
+    const btn = form.querySelector('button');
+    btn.disabled = true;
+    btn.textContent = 'Başlatılıyor...';
+    return true;
+  }
+</script>
 {% endblock %}

@@ -19,6 +19,8 @@ class Run(Base):
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     model: Mapped[str] = mapped_column(String(160))
     configs: Mapped[str] = mapped_column(String(400))  # comma-joined config ids
+    # Empty string means judge was disabled for this run.
+    judge_model: Mapped[str] = mapped_column(String(200), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     results: Mapped[list["Result"]] = relationship(

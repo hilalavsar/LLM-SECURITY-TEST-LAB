@@ -21,6 +21,21 @@
 
   <h3>Değerlendirme</h3>
   <p><span class="badge v-{{ row.verdict }}">{{ row.verdict }}</span> — {{ row.reason }}</p>
+
+  {% if row.verdict == 'PENDING' %}
+  <div class="finalize-panel">
+    <h3>Manuel karar</h3>
+    <p class="muted">
+      Otomatik değerlendiriciler karar veremedi. Yukarıdaki saldırıyı ve model
+      cevabını inceleyip aşağıdan finalize edebilirsin. Karar DB'ye kalıcı olarak yazılır.
+    </p>
+    <form method="post" action="{{ url_for('main.finalize_result', pk=row.pk) }}" class="finalize-form">
+      <button type="submit" name="verdict" value="PASS" class="btn-pass">✓ PASS — Model savundu</button>
+      <button type="submit" name="verdict" value="FAIL" class="btn-fail">✗ FAIL — Saldırı başarılı</button>
+      <button type="submit" name="verdict" value="ERROR" class="btn-error">⚠ ERROR — Teknik hata</button>
+    </form>
+  </div>
+  {% endif %}
 </section>
 
 {% endblock %}

@@ -4,36 +4,49 @@
 
 <section class="panel">
   <h1>Model karşılaştırma</h1>
-  <p class="muted">Her modelin <b>en son</b> çalıştırması — savunma config'ine göre ASR (%).
-     Düşük ASR = daha dayanıklı model. Diller ayrı satırlarda gösterilir; TR ↔ EN farkı
-     modelin <b>çok dilli güvenlik boşluğunu</b> ortaya koyar.</p>
+  <p class="muted">
+    Her <b>(model, dil, judge)</b> kombinasyonu için <b>en son</b> çalıştırmanın
+    ASR değerleri. Düşük ASR = daha dayanıklı. Judge kolonu, semantik
+    değerlendirmenin hangi model ile yapıldığını gösterir — "yok" ise judge
+    kapalı çalıştırılmıştır.
+  </p>
 
-  {% if not data %}
+  {% if not rows %}
     <p class="muted">Karşılaştıracak çalıştırma yok. Önce bir test çalıştır.</p>
   {% else %}
     <table class="results">
       <thead>
         <tr>
-          <th>Model</th><th>Dil</th>
+          <th>Model</th><th>Dil</th><th>Judge</th>
           {% for c in configs %}<th>{{ c }}</th>{% endfor %}
           <th>Run</th>
         </tr>
       </thead>
       <tbody>
-      {% for model, langs in data.items() %}
-        {% for lang in languages %}
-          {% if lang in langs %}
-          {% set d = langs[lang] %}
-          <tr>
-            {% if loop.first %}<td class="mono" rowspan="{{ langs|length }}">{{ model }}</td>{% endif %}
-            <td class="mono"><b>{{ lang | upper }}</b></td>
-            {% for c in configs %}
-              <td class="mono">{% if d.asr.get(c) is not none %}{{ d.asr[c] }}%{% else %}—{% endif %}</td>
-            {% endfor %}
-            <td><a href="{{ url_for('main.dashboard', run_id=d.run_id) }}">{{ d.run_id }} →</a></td>
-          </tr>
-          {% endif %}
-        {% endfor %}
+      {% for r in rows %}
+        <tr>
+          <td class="mono">{{ r.model }}</td>
+          <td class="mono"><b>{{ r.lang | upper }}</b></td>
+          <td class="mono">
+            {% if r.judge %}
+              <span class="tag mono" title="{{ r.judge }}">judge ✓</span>
+            {% else %}
+              <span class="tag mono" style="color:var(--muted)">yok</span>
+            {% endif %}
+          </td>
+          {% for c in configs %}
+            <td class="mono">
+              {% if r.asr.get(c) is not none %}
+                {{ r.asr[c] }}%
+                {% if r.pending.get(c, 0) > 0 %}
+                  <span class="tag mono" title="{{ r.pending[c] }} pending"
+                        style="color:var(--pending)">+{{ r.pending[c] }}p</span>
+                {% endif %}
+              {% else %}—{% endif %}
+            </td>
+          {% endfor %}
+          <td><a href="{{ url_for('main.dashboard', run_id=r.run_id) }}">{{ r.run_id }} →</a></td>
+        </tr>
       {% endfor %}
       </tbody>
     </table>
@@ -42,37 +55,98 @@
   {% endif %}
 </section>
 
+{% if pairs %}
+<section class="panel">
+  <h2>Judge etkisi karşılaştırması</h2>
+  <p class="muted">
+    Aynı (model, dil) için hem <b>judge yok</b> hem <b>judge var</b> kayıtları
+    olan çiftler. Delta = judge var − judge yok. Pozitif Δ = judge daha çok
+    FAIL saydı; negatif Δ = judge PENDING'leri PASS'e çevirdi.
+  </p>
+
+  {% for p in pairs %}
+    <div class="pair-block">
+      <div class="pair-head">
+        <h3 class="mono">{{ p.model }} <span class="tag mono">{{ p.lang | upper }}</span></h3>
+        <div class="pair-links mono">
+          <a href="{{ url_for('main.dashboard', run_id=p.no_judge_run) }}">judge yok →</a>
+          <a href="{{ url_for('main.dashboard', run_id=p.with_judge_run) }}">judge var →</a>
+        </div>
+      </div>
+
+      <table class="pair-table">
+        <thead>
+          <tr>
+            <th>Config</th>
+            <th>Judge yok</th>
+            <th>Judge var</th>
+            <th>Δ (pp)</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for cell in p.cells %}
+          <tr>
+            <td class="mono">{{ cell.config }}</td>
+            <td class="mono">
+              {% if cell.no_judge is not none %}
+                {{ cell.no_judge }}%
+                {% if cell.no_judge_pending > 0 %}
+                  <span class="tag mono" style="color:var(--pending)">+{{ cell.no_judge_pending }}p</span>
+                {% endif %}
+              {% else %}—{% endif %}
+            </td>
+            <td class="mono">
+              {% if cell.with_judge is not none %}
+                {{ cell.with_judge }}%
+                {% if cell.with_judge_pending > 0 %}
+                  <span class="tag mono" style="color:var(--pending)">+{{ cell.with_judge_pending }}p</span>
+                {% endif %}
+              {% else %}—{% endif %}
+            </td>
+            <td class="mono">
+              {% if cell.delta is not none %}
+                {% if cell.delta > 0 %}
+                  <span style="color:var(--fail)">+{{ cell.delta }}</span>
+                {% elif cell.delta < 0 %}
+                  <span style="color:var(--pass)">{{ cell.delta }}</span>
+                {% else %}
+                  <span style="color:var(--muted)">0</span>
+                {% endif %}
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endfor %}
+</section>
+{% endif %}
+
 {% endblock %}
 {% block scripts %}
-{% if data %}
+{% if rows %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
   const configs = {{ configs | tojson }};
-  const languages = {{ languages | tojson }};
-  const data = {{ data | tojson }};
-  const palette = ["#28cfe6", "#f5b23e", "#4bd583", "#8b93ff", "#f2666f", "#c084fc"];
-  // One dataset per (model, language) combination.
-  const datasets = [];
-  let i = 0;
-  Object.keys(data).forEach(m => {
-    languages.forEach(lang => {
-      if (!data[m][lang]) return;
-      datasets.push({
-        label: `${m} · ${lang.toUpperCase()}`,
-        backgroundColor: palette[i % palette.length],
-        borderRadius: 6,
-        data: configs.map(c => data[m][lang].asr[c] ?? null),
-      });
-      i++;
-    });
-  });
+  const rows = {{ rows | tojson }};
+  const palette = ["#28cfe6", "#f5b23e", "#4bd583", "#8b93ff", "#f2666f",
+                   "#c084fc", "#f97316", "#22d3ee", "#a78bfa", "#facc15"];
+  // One dataset per row (model × lang × judge).
+  const datasets = rows.map((r, i) => ({
+    label: `${r.model} · ${r.lang.toUpperCase()} · ${r.judge ? 'judge' : 'no-judge'}`,
+    backgroundColor: palette[i % palette.length],
+    borderRadius: 6,
+    data: configs.map(c => (r.asr[c] === undefined ? null : r.asr[c])),
+  }));
   new Chart(document.getElementById("cmpChart"), {
     type: "bar",
     data: { labels: configs, datasets },
     options: {
       plugins: {
-        legend: { labels: { color: "#e9eef7" } },
-        title: { display: true, text: "ASR — model × dil × savunma config", color: "#e9eef7" },
+        legend: { labels: { color: "#e9eef7", font: { size: 11 } } },
+        title: { display: true, text: "ASR — model × dil × judge × savunma config",
+                 color: "#e9eef7" },
       },
       scales: {
         y: { beginAtZero: true, max: 100, ticks: { color: "#97a1b7" },
