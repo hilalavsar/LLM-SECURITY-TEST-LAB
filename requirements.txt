@@ -13,6 +13,9 @@ pydantic-settings==2.5.2
 
 # --- Model runtime cagrisi (L2 adapters) ---
 requests==2.32.3
+# Optional: Google Gemini adapter (target model). Uninstalled = Gemini
+# simply won't appear in the target dropdown; Ollama path unaffected.
+google-generativeai==0.8.3
 
 # --- Yardimcilar ---
 python-dotenv==1.0.1

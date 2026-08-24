@@ -24,6 +24,9 @@ class Settings:
     """Simple starter settings; env-overridable."""
 
     OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+    # Google Gemini API — target model source alongside Ollama. Empty key
+    # means Gemini is disabled and won't appear in the target dropdown.
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
     TARGET_MODEL_PRIMARY = os.getenv("TARGET_MODEL_PRIMARY", "qwen2.5:7b")
     TARGET_MODEL_SECONDARY = os.getenv(
         "TARGET_MODEL_SECONDARY", "llama3.1:8b-instruct-q4_K_M"

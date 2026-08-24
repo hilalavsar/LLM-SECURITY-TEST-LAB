@@ -18,6 +18,29 @@ from app.evaluator.rules import evaluate_case
 from app.models import Result, Run
 from app.schemas.loader import load_target_system, load_test_suite
 
+# Gemini SDK is optional — only imported/used when a Gemini-tagged model is
+# selected. Keeping this at module load time so the factory below can branch.
+try:
+    from app.adapters.gemini import KNOWN_GEMINI_MODELS, GeminiAdapter
+    _GEMINI_OK = True
+except ImportError:
+    KNOWN_GEMINI_MODELS = []
+    GeminiAdapter = None  # type: ignore[assignment]
+    _GEMINI_OK = False
+
+
+def _make_adapter(model_name: str):
+    """Route model calls to the right runtime — Gemini for gemini-tagged
+    names, Ollama for everything else. Model name may be given as either
+    'gemini:gemini-1.5-pro' (dropdown form) or bare 'gemini-1.5-pro'.
+    """
+    if model_name.startswith("gemini:"):
+        bare = model_name[len("gemini:"):]
+        return GeminiAdapter(bare, Settings.GEMINI_API_KEY)
+    if _GEMINI_OK and model_name in KNOWN_GEMINI_MODELS:
+        return GeminiAdapter(model_name, Settings.GEMINI_API_KEY)
+    return OllamaAdapter(model_name, Settings.OLLAMA_HOST)
+
 _RUNS: dict[str, dict] = {}
 _LOCK = threading.Lock()
 
@@ -48,7 +71,7 @@ def run_single_attack(lang: str, case_id: str, model: str, config_name: str,
     if case is None:
         return {"error": f"Case not found: {lang}/{case_id}"}
     cfg = load_target_system(DEFENSES_DIR / f"{config_name}.yaml")
-    adapter = OllamaAdapter(model, Settings.OLLAMA_HOST)
+    adapter = _make_adapter(model)
     judge_adapter = (
         OllamaAdapter(judge_model, Settings.OLLAMA_HOST) if judge_model else None
     )
@@ -81,7 +104,7 @@ def run_chat_turn(model: str, config_name: str, messages: list[dict],
         return {"error": "messages must end with a 'user' turn"}
 
     cfg = load_target_system(DEFENSES_DIR / f"{config_name}.yaml")
-    adapter = OllamaAdapter(model, Settings.OLLAMA_HOST)
+    adapter = _make_adapter(model)
     judge_adapter = (
         OllamaAdapter(judge_model, Settings.OLLAMA_HOST) if judge_model else None
     )
@@ -117,7 +140,7 @@ def run_free_prompt(model: str, config_name: str, user_prompt: str,
     from app.schemas.test_case import DetectionMethod
 
     cfg = load_target_system(DEFENSES_DIR / f"{config_name}.yaml")
-    adapter = OllamaAdapter(model, Settings.OLLAMA_HOST)
+    adapter = _make_adapter(model)
     judge_adapter = (
         OllamaAdapter(judge_model, Settings.OLLAMA_HOST) if judge_model else None
     )
@@ -187,7 +210,7 @@ def _execute_multi(run_id: str, ts: str, model: str, config_names: list[str],
 
 def _execute_single(progress_id: str, save_id: str, model: str,
                     config_names: list[str], suite, judge_model: str) -> None:
-    adapter = OllamaAdapter(model, Settings.OLLAMA_HOST)
+    adapter = _make_adapter(model)
     # Judge is opt-in per run; empty judge_model disables the semantic layer.
     judge_adapter = (
         OllamaAdapter(judge_model, Settings.OLLAMA_HOST) if judge_model else None

@@ -26,13 +26,23 @@ _CONFIG_DESCRIPTIONS: dict[str, tuple[str, str]] = {
 
 
 def _target_models() -> list[str]:
-    """List installed Ollama models minus known judges (judges are not test targets)."""
+    """List target-eligible models: installed Ollama (minus judges) + Gemini."""
     all_models = OllamaAdapter.list_models(Settings.OLLAMA_HOST)
     judges = set(Settings.JUDGE_MODELS)
-    return [
+    ollama_targets = [
         m for m in all_models
         if m not in judges and not any(m.startswith(f"{j}:") for j in judges)
     ]
+    # Add Gemini models if the API key is configured — tagged with 'gemini:'
+    # so the runner's adapter factory can dispatch correctly.
+    gemini_targets: list[str] = []
+    if Settings.GEMINI_API_KEY:
+        try:
+            from app.adapters.gemini import KNOWN_GEMINI_MODELS
+            gemini_targets = [f"gemini:{m}" for m in KNOWN_GEMINI_MODELS]
+        except ImportError:
+            pass
+    return ollama_targets + gemini_targets
 
 
 def _judge_model_options() -> list[dict]:
@@ -203,6 +213,11 @@ def corpus_case_test(lang, case_id):
         return jsonify({"error": "model and config are required"}), 400
     result = runner.run_single_attack(lang, case_id, model, config_name, judge_model)
     return jsonify(result)
+
+
+@bp.route("/architecture")
+def architecture():
+    return render_template("architecture.html")
 
 
 @bp.route("/manual", methods=["GET"])

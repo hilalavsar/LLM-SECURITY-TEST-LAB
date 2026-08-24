@@ -6,7 +6,7 @@
   <title>{% block title %}LLM Security Test Lab{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -20,6 +20,7 @@
       <a href="{{ url_for('main.corpus_list') }}">Corpus</a>
       <a href="{{ url_for('main.manual_test') }}">Manuel</a>
       <a href="{{ url_for('main.compare') }}">Karşılaştır</a>
+      <a href="{{ url_for('main.architecture') }}">Mimari</a>
     </nav>
   </header>
   <main class="wrap">
