@@ -17,25 +17,22 @@ bp = Blueprint("main", __name__)
 
 
 # Human-readable descriptions shown next to each defense config checkbox.
-# Add a new entry when a new config{N}_{name}.yaml file is introduced.
+# Add a new entry when a new config{N}_{name}_en.yaml file is introduced.
 _CONFIG_DESCRIPTIONS: dict[str, tuple[str, str]] = {
-    # Turkish defense prompts
-    "config0_none":        ("Yok (baseline) · TR",  "Sadece canary tanımlı, kural yok"),
-    "config1_basic":       ("Temel · TR",           "4 kısa kural (paylaşma, açıklama, zararlı reddet, rolü değiştirme)"),
-    "config2_hardened":    ("Sıkı · TR",            "4 sıkı kural (instruction priority, format coverage, secrecy, pretext immunity)"),
-    # English defense prompts (2x2 experiment)
-    "config0_none_en":     ("None (baseline) · EN", "Only canary defined, no rules — English"),
-    "config1_basic_en":    ("Basic · EN",           "4 short rules — English (SafeAssist persona)"),
-    "config2_hardened_en": ("Hardened · EN",        "4 strict rules — English (instruction hierarchy, encoding resistance, ...)"),
+    "config0_none_en":     ("None (baseline)", "Sadece canary tanımlı, kural yok"),
+    "config1_basic_en":    ("Basic",           "4 kısa kural (SafeAssist persona)"),
+    "config2_hardened_en": ("Hardened",        "4 sıkı kural (instruction hierarchy, encoding resistance, confidentiality, pretext immunity)"),
 }
 
 
 def _target_models() -> list[str]:
-    """List installed Ollama models minus the judge (judge is not a test target)."""
+    """List installed Ollama models minus known judges (judges are not test targets)."""
     all_models = OllamaAdapter.list_models(Settings.OLLAMA_HOST)
-    judge_name = Settings.JUDGE_MODEL
-    return [m for m in all_models
-            if m != judge_name and not m.startswith(f"{judge_name}:")]
+    judges = set(Settings.JUDGE_MODELS)
+    return [
+        m for m in all_models
+        if m not in judges and not any(m.startswith(f"{j}:") for j in judges)
+    ]
 
 
 def _judge_model_options() -> list[dict]:
@@ -53,21 +50,12 @@ def _judge_model_options() -> list[dict]:
 
 
 def _defense_configs_with_desc() -> list[dict]:
-    """Return [{name, label, desc, lang}] so templates can group by language."""
+    """Return [{name, label, desc}] for all defense YAMLs found on disk."""
     out = []
     for name in runner.list_defense_configs():
         label, desc = _CONFIG_DESCRIPTIONS.get(name, (name, ""))
-        lang = "en" if name.endswith("_en") else "tr"
-        out.append({"name": name, "label": label, "desc": desc, "lang": lang})
+        out.append({"name": name, "label": label, "desc": desc})
     return out
-
-
-def _defense_configs_grouped() -> dict:
-    """Group configs by language for two-column UI: {'tr': [...], 'en': [...]}"""
-    grouped: dict = {"tr": [], "en": []}
-    for c in _defense_configs_with_desc():
-        grouped[c["lang"]].append(c)
-    return grouped
 
 
 @bp.route("/")
@@ -76,7 +64,7 @@ def index():
     return render_template(
         "index.html",
         models=models,
-        configs_by_lang=_defense_configs_grouped(),
+        configs=_defense_configs_with_desc(),
         judge_options=_judge_model_options(),
         default_judge=Settings.JUDGE_MODEL,
         runs=runner.list_runs(),
@@ -88,13 +76,12 @@ def index():
 def run():
     model = request.form.get("model", "")
     configs = request.form.getlist("configs")
-    # Language is now user-choice: TR, EN, or both — at least one required.
-    languages = [l for l in request.form.getlist("lang") if l in ("tr", "en")]
     # Judge model: empty string means judge is off for this run.
     judge_model = request.form.get("judge_model", "").strip()
-    if not model or not configs or not languages:
+    if not model or not configs:
         return redirect(url_for("main.index"))
-    run_id = runner.start_run(model, configs, languages, judge_model=judge_model)
+    # English-only corpus; language dimension removed 2026-08-24.
+    run_id = runner.start_run(model, configs, ["en"], judge_model=judge_model)
     return redirect(url_for("main.progress", run_id=run_id))
 
 
@@ -114,6 +101,9 @@ def progress_status(run_id):
 @bp.route("/compare")
 def compare():
     configs, rows = runner.model_comparison()
+    # Belt & suspenders: never show legacy TR-only config columns even if a
+    # stale DB row still carries them.
+    configs = [c for c in configs if c.endswith("_en")]
     pairs = runner.judge_impact_pairs(rows)
     return render_template("compare.html", configs=configs, rows=rows, pairs=pairs)
 
@@ -123,9 +113,19 @@ def dashboard(run_id):
     run = runner.load_run(run_id)
     if not run:
         return redirect(url_for("main.index"))
+    # Aggregate totals across all configs for the top stat cards.
+    totals = {"cases": 0, "pass": 0, "fail": 0, "pending": 0}
+    for s in run["summary"].values():
+        totals["cases"]   += s["total"]
+        totals["pass"]    += s["decided"] - s["fail"]
+        totals["fail"]    += s["fail"]
+        totals["pending"] += s["pending"]
+    decided = totals["pass"] + totals["fail"]
+    totals["asr"] = round(100 * totals["fail"] / decided, 1) if decided else 0.0
     return render_template(
         "dashboard.html",
         run=run,
+        totals=totals,
         judge_options=_judge_model_options(),
         default_judge=Settings.JUDGE_MODEL,
     )
@@ -168,19 +168,12 @@ def finalize_result(pk):
 @bp.route("/corpus")
 def corpus_list():
     cases_by_lang = runner.list_all_cases()
-    # Group each language's cases by category for readable rendering.
-    def group_by_cat(cases):
-        grouped: dict[str, list] = {}
-        for c in cases:
-            grouped.setdefault(c.category.value, []).append(c)
-        return grouped
-    grouped_tr = group_by_cat(cases_by_lang.get("tr", []))
-    grouped_en = group_by_cat(cases_by_lang.get("en", []))
+    grouped_en: dict[str, list] = {}
+    for c in cases_by_lang.get("en", []):
+        grouped_en.setdefault(c.category.value, []).append(c)
     return render_template(
         "corpus_list.html",
-        grouped_tr=grouped_tr,
         grouped_en=grouped_en,
-        total_tr=sum(len(v) for v in grouped_tr.values()),
         total_en=sum(len(v) for v in grouped_en.values()),
     )
 
@@ -190,14 +183,14 @@ def corpus_case(lang, case_id):
     case = runner.get_case(lang, case_id)
     if case is None:
         return redirect(url_for("main.corpus_list"))
-    models = _target_models()
-    configs = runner.list_defense_configs()
     return render_template(
         "corpus_case.html",
         case=case,
         lang=lang,
-        models=models,
-        configs=configs,
+        models=_target_models(),
+        configs=runner.list_defense_configs(),
+        judge_options=_judge_model_options(),
+        default_judge=Settings.JUDGE_MODEL,
     )
 
 
@@ -205,7 +198,51 @@ def corpus_case(lang, case_id):
 def corpus_case_test(lang, case_id):
     model = request.form.get("model", "")
     config_name = request.form.get("config", "")
+    judge_model = request.form.get("judge_model", "").strip()
     if not model or not config_name:
         return jsonify({"error": "model and config are required"}), 400
-    result = runner.run_single_attack(lang, case_id, model, config_name)
+    result = runner.run_single_attack(lang, case_id, model, config_name, judge_model)
+    return jsonify(result)
+
+
+@bp.route("/manual", methods=["GET"])
+def manual_test():
+    return render_template(
+        "manual.html",
+        models=_target_models(),
+        configs=runner.list_defense_configs(),
+        judge_options=_judge_model_options(),
+        default_judge=Settings.JUDGE_MODEL,
+    )
+
+
+@bp.route("/manual/test", methods=["POST"])
+def manual_test_run():
+    model = request.form.get("model", "")
+    config_name = request.form.get("config", "")
+    judge_model = request.form.get("judge_model", "").strip()
+    user_prompt = request.form.get("prompt", "").strip()
+    if not model or not config_name or not user_prompt:
+        return jsonify({"error": "model, config, and prompt are required"}), 400
+    result = runner.run_free_prompt(model, config_name, user_prompt, judge_model)
+    return jsonify(result)
+
+
+@bp.route("/manual/chat", methods=["POST"])
+def manual_chat():
+    """Multi-turn chat turn. Body: {model, config, judge_model, messages: [...]}"""
+    data = request.get_json(silent=True) or {}
+    model = (data.get("model") or "").strip()
+    config_name = (data.get("config") or "").strip()
+    judge_model = (data.get("judge_model") or "").strip()
+    messages = data.get("messages") or []
+    if not model or not config_name:
+        return jsonify({"error": "model and config are required"}), 400
+    if not isinstance(messages, list) or not messages:
+        return jsonify({"error": "messages must be a non-empty list"}), 400
+    # Basic shape check.
+    for m in messages:
+        if not isinstance(m, dict) or m.get("role") not in ("user", "assistant"):
+            return jsonify({"error": "each message needs role user|assistant"}), 400
+    result = runner.run_chat_turn(model, config_name, messages, judge_model)
     return jsonify(result)

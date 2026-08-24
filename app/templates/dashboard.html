@@ -3,13 +3,13 @@
 {% block content %}
 
 <section class="panel">
-  <div class="dash-head">
-    <div>
-      <h1>Sonuç panosu</h1>
-      <p class="muted mono">
-        run {{ run.id }} · model {{ run.model }} ·
+  <div class="dash-hero">
+    <div class="dash-hero-text">
+      <h1>Sonuç panosu <span class="greeting-emoji">📊</span></h1>
+      <p>
+        run <b>{{ run.id }}</b> · model <b>{{ run.model }}</b> ·
         {% if run.judge_model %}
-          judge <span title="{{ run.judge_model }}">✓</span>
+          judge ✓ <span title="{{ run.judge_model }}">{{ run.judge_model.split('/')[-1] }}</span>
         {% else %}
           judge yok
         {% endif %}
@@ -18,19 +18,61 @@
     <a class="btn-secondary" href="{{ url_for('main.index') }}">＋ Yeni test</a>
   </div>
 
-  <div class="cards">
-    {% for cname, s in run.summary.items() %}
-    <div class="card">
-      <div class="card-label mono">{{ cname }}</div>
-      <div class="card-asr">{{ s.asr }}<span>%</span></div>
-      <div class="card-sub mono">ASR · {{ s.fail }}/{{ s.decided }} FAIL · {{ s.pending }} pending</div>
+  {# ---------- Top-level stat cards ---------- #}
+  <div class="stat-grid">
+    <div class="stat-card stat-card--total">
+      <div class="stat-icon">📋</div>
+      <div class="stat-value">{{ totals.cases }}</div>
+      <div class="stat-label">Toplam senaryo</div>
+      <div class="stat-sub">{{ run.summary | length }} savunma config</div>
     </div>
+    <div class="stat-card stat-card--pass">
+      <div class="stat-icon">✓</div>
+      <div class="stat-value">{{ totals.pass }}</div>
+      <div class="stat-label">PASS · savundu</div>
+      <div class="stat-sub">
+        {% set decided = totals.pass + totals.fail %}
+        {% if decided > 0 %}
+          {{ ((totals.pass / decided) * 100) | round(1) }}% karar oranı
+        {% else %}—{% endif %}
+      </div>
+    </div>
+    <div class="stat-card stat-card--fail">
+      <div class="stat-icon">✗</div>
+      <div class="stat-value">{{ totals.fail }}</div>
+      <div class="stat-label">FAIL · savunma kırıldı</div>
+      <div class="stat-sub">Genel ASR {{ totals.asr }}%</div>
+    </div>
+    <div class="stat-card stat-card--pending">
+      <div class="stat-icon">⏳</div>
+      <div class="stat-value">{{ totals.pending }}</div>
+      <div class="stat-label">PENDING · karar bekliyor</div>
+      <div class="stat-sub">
+        {% if totals.pending > 0 %}elle veya judge ile karara bağla{% else %}—{% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# ---------- Per-config ASR chart ---------- #}
+  <h3>Config bazlı ASR</h3>
+  <div class="chart-box"><canvas id="asrChart"></canvas></div>
+
+  {# ---------- Per-config mini cards ---------- #}
+  <h3>Config detay</h3>
+  <div class="cfg-mini-grid">
+    {% for cname, s in run.summary.items() %}
+      <div class="cfg-mini">
+        <div class="cfg-mini-name">{{ cname }}</div>
+        <div class="cfg-mini-asr">{{ s.asr }}<span>%</span></div>
+        <div class="cfg-mini-detail">
+          {{ s.fail }}/{{ s.decided }} FAIL
+          {% if s.pending > 0 %}· {{ s.pending }} pending{% endif %}
+        </div>
+      </div>
     {% endfor %}
   </div>
 
-  <div class="chart-box"><canvas id="asrChart"></canvas></div>
-
-  {# ============ Judge impact info box ============ #}
+  {# ---------- Judge impact info box ---------- #}
   <div class="judge-box">
     <div class="judge-box-head">
       <span class="judge-box-label">Judge etkisi</span>
@@ -50,7 +92,7 @@
         ({{ js.judge_pass }} PASS, {{ js.judge_fail }} FAIL).
         {% if js.judge_unparseable > 0 %}
           <b>{{ js.judge_unparseable }}</b> tanesinde meta-refusal /
-          format hatası olduğu için PENDING olarak kaldı.
+          format hatası olduğu için PENDING kaldı.
         {% endif %}
         {% if js.judge_error > 0 %}
           <b>{{ js.judge_error }}</b> teknik hata (timeout vb).
@@ -73,20 +115,19 @@
       </p>
       {% if js.rule_pending_no_judge > 0 %}
         <p class="muted" style="font-size:.85rem">
-          → Detay sayfalarından elle PASS/FAIL karara bağlayabilir veya
-          aşağıdaki panelden judge ile yeniden değerlendirebilirsin.
+          → Detay sayfalarından elle karar verebilir veya aşağıdaki panelden
+          judge ile yeniden değerlendirebilirsin.
         </p>
       {% endif %}
     {% endif %}
   </div>
 
-  {# ============ Re-evaluate with different judge ============ #}
+  {# ---------- Re-evaluate with different judge ---------- #}
   <div class="reeval-box">
     <div class="judge-box-label">Farklı judge ile yeniden değerlendir</div>
     <p class="muted" style="font-size:.88rem">
       Model cevapları aynen kalır (deterministik). Sadece değerlendirici
-      değiştirilir ve <b>yeni bir run</b> olarak kaydedilir — bu run
-      dokunulmaz. Süre: ~1-2 dk (sadece semantik case'ler için judge çağrısı).
+      değişir ve <b>yeni bir run</b> olarak kaydedilir. Süre: ~1-2 dk.
     </p>
     <form method="post" action="{{ url_for('main.re_evaluate', run_id=run.id) }}"
           class="reeval-form"
@@ -138,19 +179,48 @@
   const asr = labels.map(k => summary[k].asr);
   new Chart(document.getElementById("asrChart"), {
     type: "bar",
-    data: { labels, datasets: [{
-      label: "ASR (%)", data: asr,
-      backgroundColor: "#f2666f", borderRadius: 6, maxBarThickness: 90 }] },
+    data: {
+      labels,
+      datasets: [{
+        label: "ASR (%)",
+        data: asr,
+        backgroundColor: "rgba(148, 0, 255, 0.75)",
+        hoverBackgroundColor: "#9400FF",
+        borderRadius: 8,
+        maxBarThickness: 96,
+      }],
+    },
     options: {
-      plugins: { legend: { display: false },
-                 title: { display: true, text: "Attack Success Rate — savunma config'ine göre",
-                          color: "#e9eef7" } },
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        title: {
+          display: true,
+          text: "Attack Success Rate — savunma config'ine göre",
+          color: "#27005D",
+          font: { size: 13, weight: '600' },
+        },
+        tooltip: {
+          backgroundColor: "#27005D",
+          titleColor: "#FFFFFF",
+          bodyColor: "#AED2FF",
+          borderColor: "#9400FF",
+          borderWidth: 1,
+        },
+      },
       scales: {
-        y: { beginAtZero: true, max: 100, ticks: { color: "#97a1b7" },
-             grid: { color: "rgba(148,163,184,.12)" } },
-        x: { ticks: { color: "#97a1b7" }, grid: { display: false } }
-      }
-    }
+        y: {
+          beginAtZero: true, max: 100,
+          ticks: { color: "#7C6BA0", font: { family: "JetBrains Mono" } },
+          grid: { color: "rgba(148,0,255,.08)" },
+        },
+        x: {
+          ticks: { color: "#7C6BA0", font: { family: "JetBrains Mono" } },
+          grid: { display: false },
+        },
+      },
+    },
   });
 </script>
 {% endblock %}

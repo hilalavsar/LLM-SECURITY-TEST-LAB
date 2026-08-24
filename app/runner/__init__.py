@@ -41,16 +41,96 @@ def get_case(lang: str, case_id: str):
     return None
 
 
-def run_single_attack(lang: str, case_id: str, model: str, config_name: str) -> dict:
-    """Execute one attack and return {response, verdict, reason, latency_ms, error}.
-    Not persisted to DB — this is for interactive corpus browsing."""
+def run_single_attack(lang: str, case_id: str, model: str, config_name: str,
+                      judge_model: str = "") -> dict:
+    """Execute one corpus attack (not persisted). Optional judge for semantic cases."""
     case = get_case(lang, case_id)
     if case is None:
         return {"error": f"Case not found: {lang}/{case_id}"}
     cfg = load_target_system(DEFENSES_DIR / f"{config_name}.yaml")
     adapter = OllamaAdapter(model, Settings.OLLAMA_HOST)
+    judge_adapter = (
+        OllamaAdapter(judge_model, Settings.OLLAMA_HOST) if judge_model else None
+    )
     res = adapter.generate(case.prompt, cfg.system_prompt, Settings.GEN_OPTIONS)
-    verdict, reason = evaluate_case(case, res.text, cfg.canary)
+    verdict, reason = evaluate_case(
+        case, res.text, cfg.canary, judge_adapter=judge_adapter
+    )
+    return {
+        "response": res.text,
+        "verdict": verdict.value,
+        "reason": reason,
+        "latency_ms": round(res.latency_ms),
+        "error": res.error,
+    }
+
+
+def run_chat_turn(model: str, config_name: str, messages: list[dict],
+                  judge_model: str = "") -> dict:
+    """Multi-turn chat with judge evaluation on the latest assistant reply.
+
+    `messages` is [{'role': 'user'|'assistant', 'content': '...'}, ...] in
+    chronological order, LAST entry MUST be a user message. Judge sees only
+    the latest exchange (the user's last message + assistant's reply).
+    """
+    from types import SimpleNamespace
+
+    from app.schemas.test_case import DetectionMethod
+
+    if not messages or messages[-1].get("role") != "user":
+        return {"error": "messages must end with a 'user' turn"}
+
+    cfg = load_target_system(DEFENSES_DIR / f"{config_name}.yaml")
+    adapter = OllamaAdapter(model, Settings.OLLAMA_HOST)
+    judge_adapter = (
+        OllamaAdapter(judge_model, Settings.OLLAMA_HOST) if judge_model else None
+    )
+    res = adapter.chat(messages, cfg.system_prompt, Settings.GEN_OPTIONS)
+    # Evaluator sees only the last user prompt as the "attack" and the reply.
+    shim = SimpleNamespace(
+        prompt=messages[-1]["content"],
+        failure_indicators=[],
+        detection_method=DetectionMethod.JUDGE,
+    )
+    verdict, reason = evaluate_case(
+        shim, res.text, cfg.canary, judge_adapter=judge_adapter
+    )
+    return {
+        "reply": res.text,
+        "verdict": verdict.value,
+        "reason": reason,
+        "latency_ms": round(res.latency_ms),
+        "error": res.error,
+    }
+
+
+def run_free_prompt(model: str, config_name: str, user_prompt: str,
+                    judge_model: str = "") -> dict:
+    """Manual free-form prompt test — no corpus case, no persistence.
+
+    Rule-based layer only catches plaintext canary leak (no indicators for a
+    free-form prompt); anything semantic goes to the judge if provided,
+    otherwise PENDING.
+    """
+    from types import SimpleNamespace
+
+    from app.schemas.test_case import DetectionMethod
+
+    cfg = load_target_system(DEFENSES_DIR / f"{config_name}.yaml")
+    adapter = OllamaAdapter(model, Settings.OLLAMA_HOST)
+    judge_adapter = (
+        OllamaAdapter(judge_model, Settings.OLLAMA_HOST) if judge_model else None
+    )
+    res = adapter.generate(user_prompt, cfg.system_prompt, Settings.GEN_OPTIONS)
+    # Duck-typed shim: evaluator only reads prompt/failure_indicators/detection_method.
+    shim = SimpleNamespace(
+        prompt=user_prompt,
+        failure_indicators=[],
+        detection_method=DetectionMethod.JUDGE,
+    )
+    verdict, reason = evaluate_case(
+        shim, res.text, cfg.canary, judge_adapter=judge_adapter
+    )
     return {
         "response": res.text,
         "verdict": verdict.value,
@@ -75,7 +155,7 @@ def start_run(model: str, config_names: list[str], languages: list[str] | None =
     judge_model="" disables the judge for this run; otherwise the given Ollama
     model is used as the semantic judge for PENDING cases.
     """
-    languages = languages or ["tr"]
+    languages = languages or ["en"]
     # Millisecond suffix prevents collisions on rapid double-submit.
     ts = time.strftime("%Y%m%d-%H%M%S") + f"-{int(time.time() * 1000) % 1000:03d}"
     run_id = f"{ts}-{languages[0]}"
@@ -287,16 +367,10 @@ def list_runs() -> list[dict]:
 
 
 def _lang_of(run: "Run") -> str:
-    """Derive language from run_id suffix (e.g. '-tr' / '-en'); legacy runs default to 'tr'."""
-    for lang in ("tr", "en"):
-        if run.id.endswith(f"-{lang}"):
-            return lang
-    # Fallback: sniff from a case_id prefix.
-    if run.results:
-        cid = run.results[0].case_id
-        if cid.startswith("EN-"):
-            return "en"
-    return "tr"
+    """Legacy runs may still carry a '-tr' suffix; everything new is 'en'."""
+    if run.id.endswith("-tr"):
+        return "tr"
+    return "en"
 
 
 def judge_impact_pairs(rows: list[dict]) -> list[dict]:
@@ -359,23 +433,56 @@ def model_comparison() -> tuple[list[str], list[dict]]:
             key = (r.model, _lang_of(r), r.judge_model or "")
             latest.setdefault(key, r)
 
+        # Legacy TR runs stored config names without the _en suffix; hide them
+        # now that the project is English-only.
+        def _is_current(cfg: str) -> bool:
+            return cfg.endswith("_en")
+
         configs_seen: list[str] = []
         rows: list[dict] = []
         for (model, lang, judge), run in latest.items():
             result_rows = [_row_to_dict(x) for x in run.results]
-            cfgs = run.configs.split(",")
+            all_cfgs = run.configs.split(",")
+            cfgs = [c for c in all_cfgs if _is_current(c)]
+            if not cfgs:
+                continue  # Legacy TR-only run — skip entirely.
             summ = _summarize(result_rows, cfgs)
             for c in cfgs:
                 if c not in configs_seen:
                     configs_seen.append(c)
+            # Overall totals across all configs of this run (for report card).
+            t_pass = sum(summ[c]["decided"] - summ[c]["fail"] for c in cfgs)
+            t_fail = sum(summ[c]["fail"] for c in cfgs)
+            t_pending = sum(summ[c]["pending"] for c in cfgs)
+            t_total = sum(summ[c]["total"] for c in cfgs)
+            decided = t_pass + t_fail
+            overall_asr = round(100 * t_fail / decided, 1) if decided else 0.0
+            # How each verdict was reached (rule vs judge vs manual) — for the
+            # explanation paragraph in the report modal.
+            # Filter result rows to only current configs to keep counts honest.
+            current_result_rows = [rr for rr in result_rows if rr["config"] in cfgs]
+            j_stats = _judge_stats(current_result_rows)
+
             rows.append({
                 "model": model,
                 "lang": lang,
                 "judge": judge,
                 "run_id": run.id,
+                "created_at": run.created_at.isoformat() if run.created_at else "",
                 "configs": cfgs,
                 "asr": {c: summ[c]["asr"] for c in cfgs},
                 "pending": {c: summ[c]["pending"] for c in cfgs},
+                # Extra counts used by the stacked PASS/FAIL bar on /compare.
+                "fail": {c: summ[c]["fail"] for c in cfgs},
+                "passed": {c: summ[c]["decided"] - summ[c]["fail"] for c in cfgs},
+                "total": {c: summ[c]["total"] for c in cfgs},
+                # Aggregate totals for the report modal.
+                "totals": {
+                    "pass": t_pass, "fail": t_fail, "pending": t_pending,
+                    "total": t_total, "asr": overall_asr,
+                },
+                # Verdict source breakdown — how many resolved by rule vs judge.
+                "judge_stats": j_stats,
             })
         # Stable sort: model, then lang, then judge (empty first as "no judge").
         rows.sort(key=lambda r: (r["model"], r["lang"], r["judge"]))

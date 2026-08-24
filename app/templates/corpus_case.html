@@ -41,19 +41,31 @@
 <section class="panel">
   <h2>Canlı test</h2>
   <p class="muted">
-    Bir model ve savunma config'i seç → saldırı gönderilir → verdikt döner.
-    Sonuç DB'ye kaydedilmez (bu tek seferlik keşif içindir).
+    Model + savunma config + (opsiyonel) judge seç → saldırı gönderilir →
+    verdikt döner. Sonuç DB'ye kaydedilmez.
   </p>
 
-  <form id="testForm" class="runform">
-    <label>Model
-      <select name="model" required>
-        {% for m in models %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
-      </select>
-    </label>
-    <label>Savunma config
-      <select name="config" required>
-        {% for c in configs %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+  <form id="testForm" class="runform" style="max-width:640px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <label>Model
+        <select name="model" required>
+          {% for m in models %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Savunma config
+        <select name="config" required>
+          {% for c in configs %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+    <label>Yorumlayıcı (judge) modeli
+      <select name="judge_model">
+        <option value="">Yok — semantik case'ler PENDING kalır</option>
+        {% for opt in judge_options %}
+          <option value="{{ opt.value }}" {% if opt.value == default_judge %}selected{% endif %}>
+            {{ opt.label }}{% if opt.value == default_judge %} · varsayılan{% endif %}
+          </option>
+        {% endfor %}
       </select>
     </label>
     <button type="submit" id="runBtn">▶ Saldırıyı çalıştır</button>
@@ -88,7 +100,7 @@
     btn.disabled = true;
     btn.textContent = 'Çalışıyor...';
     result.hidden = false;
-    statusEl.textContent = 'Model çağrılıyor... judge case ise +5-15s ekstra sürebilir.';
+    statusEl.textContent = 'Model çağrılıyor... judge açıksa +5-15s ekstra sürebilir.';
     verdictEl.innerHTML = '';
     reasonEl.textContent = '';
     respWrap.hidden = true;

@@ -49,6 +49,40 @@ class OllamaAdapter(BaseModelAdapter):
         except Exception as e:  # noqa: BLE001 - capture any runtime error safely
             return GenerationResult("", self.model_name, (time.time() - t0) * 1000, options, str(e))
 
+    def chat(
+        self,
+        messages: list[dict],
+        system_prompt: str | None = None,
+        options: dict | None = None,
+    ) -> GenerationResult:
+        """Multi-turn chat. `messages` is a list of {'role','content'} dicts
+        already in send-order (oldest first, latest user message last).
+        The system prompt is prepended if given.
+        """
+        options = options or {}
+        full = []
+        if system_prompt:
+            full.append({"role": "system", "content": system_prompt})
+        full.extend(messages)
+        body = json.dumps({
+            "model": self.model_name,
+            "messages": full,
+            "stream": False,
+            "options": options,
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            self.host + "/api/chat", data=body,
+            headers={"Content-Type": "application/json"},
+        )
+        t0 = time.time()
+        try:
+            with urllib.request.urlopen(req, timeout=200) as r:
+                data = json.loads(r.read())
+            text = data.get("message", {}).get("content", "")
+            return GenerationResult(text, self.model_name, (time.time() - t0) * 1000, options)
+        except Exception as e:  # noqa: BLE001
+            return GenerationResult("", self.model_name, (time.time() - t0) * 1000, options, str(e))
+
     def health_check(self) -> bool:
         try:
             urllib.request.urlopen(self.host + "/api/version", timeout=3)

@@ -12,13 +12,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
 DEFENSES_DIR = DATA_DIR / "defenses"
-# Language-keyed corpus registry — used by runner to pick the right suite.
+# English-only corpus. TR scope removed 2026-08-24; project pivoted to
+# system-prompt attack/defense diversity in a single language.
 CORPUS_PATHS = {
-    "tr": DATA_DIR / "test_cases" / "corpus_tr_v0.yaml",
     "en": DATA_DIR / "test_cases" / "corpus_en_v0.yaml",
 }
-# Kept for backward compatibility with legacy imports.
-CORPUS_PATH = CORPUS_PATHS["tr"]
+CORPUS_PATH = CORPUS_PATHS["en"]
 
 
 class Settings:
@@ -38,10 +37,17 @@ class Settings:
     GEN_OPTIONS = {"temperature": 0, "seed": 42, "num_predict": 320}
 
     # Judge (L3 semantic evaluator) — used when rule-based returns REVIEW.
+    # Primary judge is the fine-tuned Qwen 2.5 3B Turkish Judge Pilot.
     JUDGE_MODEL = os.getenv(
         "JUDGE_MODEL",
-        "hf.co/sadecebirisii/Llama-3.1-8B-Turkish-Siber-Muhafiz",
+        "hf.co/sadecebirisii/Qwen2.5-3B-Turkish-Judge-Pilot",
     )
+    # All known judge models — filtered out of the target-model dropdown so a
+    # judge never appears as a test target by mistake. Add new judge models here.
+    JUDGE_MODELS = [
+        "hf.co/sadecebirisii/Qwen2.5-3B-Turkish-Judge-Pilot",
+        "hf.co/sadecebirisii/Llama-3.1-8B-Turkish-Siber-Muhafiz",
+    ]
     JUDGE_ENABLED = os.getenv("JUDGE_ENABLED", "true").lower() == "true"
     # Judge is deterministic; num_predict smaller since expected output is short.
     JUDGE_OPTIONS = {"temperature": 0, "seed": 42, "num_predict": 120}

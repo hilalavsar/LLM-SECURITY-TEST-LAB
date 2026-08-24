@@ -4,13 +4,19 @@
 
 <section class="panel">
   <h1>Yeni test çalıştır</h1>
-  <p class="muted">Bir model ve savunma seviyesi seç; saldırı corpus'u seçtiğin
-     her config'e karşı çalıştırılır ve ASR hesaplanır.</p>
+  <p class="muted">Bir model ve savunma seviyesi seç; İngilizce saldırı corpus'u
+     seçtiğin her config'e karşı çalıştırılır ve ASR hesaplanır.</p>
 
   {% if not ollama_up %}
     <div class="alert">⚠️ Ollama daemon'a ulaşılamıyor. Ollama'nın çalıştığından
        emin ol (<code>ollama serve</code>), sonra sayfayı yenile.</div>
   {% endif %}
+
+  <div class="quick-links" style="margin:8px 0 16px 0">
+    <a class="tag mono" href="{{ url_for('main.compare') }}">📊 Karşılaştır</a>
+    <a class="tag mono" href="{{ url_for('main.corpus_list') }}">📚 Corpus</a>
+    <a class="tag mono" href="{{ url_for('main.manual_test') }}">🧪 Manuel test</a>
+  </div>
 
   <form method="post" action="{{ url_for('main.run') }}" class="runform" id="runform"
         onsubmit="return validateAndDisable(this);">
@@ -22,48 +28,18 @@
 
     <fieldset>
       <legend>Savunma seviyeleri (en az bir tanesi)</legend>
-      <p class="cfg-hint muted">
-        Türkçe ve İngilizce savunma prompt'ları ayrı kolonda. 2×2 deney için
-        her ikisinden de seçebilirsin.
-      </p>
-      <div class="cfg-two-col">
-        <div class="cfg-col">
-          <div class="cfg-col-head mono">🇹🇷 TÜRKÇE</div>
-          {% for c in configs_by_lang.tr %}
-            <label class="check config-check">
-              <input type="checkbox" name="configs" value="{{ c.name }}" checked>
-              <span>
-                <span class="cfg-label">{{ c.label }}</span>
-                <span class="cfg-name">{{ c.name }}</span>
-                {% if c.desc %}<span class="cfg-desc">{{ c.desc }}</span>{% endif %}
-              </span>
-            </label>
-          {% endfor %}
-        </div>
-        <div class="cfg-col">
-          <div class="cfg-col-head mono">🇬🇧 ENGLISH</div>
-          {% for c in configs_by_lang.en %}
-            <label class="check config-check">
-              <input type="checkbox" name="configs" value="{{ c.name }}">
-              <span>
-                <span class="cfg-label">{{ c.label }}</span>
-                <span class="cfg-name">{{ c.name }}</span>
-                {% if c.desc %}<span class="cfg-desc">{{ c.desc }}</span>{% endif %}
-              </span>
-            </label>
-          {% endfor %}
-        </div>
+      <div class="cfg-col">
+        {% for c in configs %}
+          <label class="check config-check">
+            <input type="checkbox" name="configs" value="{{ c.name }}" {% if loop.first %}checked{% endif %}>
+            <span>
+              <span class="cfg-label">{{ c.label }}</span>
+              <span class="cfg-name">{{ c.name }}</span>
+              {% if c.desc %}<span class="cfg-desc">{{ c.desc }}</span>{% endif %}
+            </span>
+          </label>
+        {% endfor %}
       </div>
-    </fieldset>
-
-    <fieldset>
-      <legend>Dil (en az bir tanesi)</legend>
-      <label class="check">
-        <input type="checkbox" name="lang" value="tr" checked> Türkçe corpus
-      </label>
-      <label class="check">
-        <input type="checkbox" name="lang" value="en"> İngilizce corpus
-      </label>
     </fieldset>
 
     <label>Yorumlayıcı (judge) modeli
@@ -122,13 +98,8 @@
 <script>
   function validateAndDisable(form) {
     const configCount = form.querySelectorAll('input[name="configs"]:checked').length;
-    const langCount = form.querySelectorAll('input[name="lang"]:checked').length;
     if (configCount === 0) {
       alert('En az bir savunma seviyesi seçmelisin.');
-      return false;
-    }
-    if (langCount === 0) {
-      alert('En az bir dil seçmelisin (Türkçe ya da İngilizce).');
       return false;
     }
     const btn = form.querySelector('button');
