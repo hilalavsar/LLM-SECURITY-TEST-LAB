@@ -4,15 +4,13 @@ Jinja2==3.1.4
 
 # --- Veritabani (Persistence) ---
 SQLAlchemy==2.0.35
-alembic==1.13.3
 psycopg2-binary==2.9.9
 
 # --- Veri dogrulama (schemas) ---
 pydantic==2.9.2
-pydantic-settings==2.5.2
 
 # --- Model runtime cagrisi (L2 adapters) ---
-requests==2.32.3
+# Ollama ve OpenAI uyumlu API'ler standart kutuphaneyle (urllib) cagrilir.
 # Optional: Google Gemini adapter (target model). Uninstalled = Gemini
 # simply won't appear in the target dropdown; Ollama path unaffected.
 google-generativeai==0.8.3

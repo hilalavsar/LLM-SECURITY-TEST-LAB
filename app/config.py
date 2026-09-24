@@ -1,7 +1,4 @@
-"""Configuration — reads settings from environment variables.
-
-Kept intentionally small for now; will move to pydantic-settings in Week 2.
-"""
+"""Configuration — reads settings from environment variables (.env)."""
 
 from __future__ import annotations
 
