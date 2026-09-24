@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block title %}API sağlayıcıları — LLM Security Test Lab{% endblock %}
+{% block content %}
+
+<section class="panel">
+  <h1>API sağlayıcıları</h1>
+  <p class="muted" style="margin:6px 0 0;max-width:720px">
+    OpenAI-uyumlu herhangi bir uç ekleyebilirsin: bulut API'leri ya da LM Studio,
+    vLLM gibi kendi makinende çalışan sunucular. Eklenen modeller test, manuel
+    sohbet ve judge listelerinde <code>api:</code> önekiyle görünür. Ollama'da
+    yüklü modeller zaten otomatik listelenir; diskteki bir <code>.gguf</code>
+    dosyasını ise aşağıdaki <b>Yerel model ekle</b> bölümünden ekleyebilirsin.
+  </p>
+
+  <div class="prov-note">
+    <b>Anahtar nerede duruyor?</b> Sadece çalışan uygulamanın belleğinde.
+    Veritabanına, <code>.env</code>'ye, loglara veya tarayıcıya yazılmaz ve
+    uygulama yeniden başlayınca silinir. Geçmiş koşular yalnızca model adını saklar.
+  </div>
+
+  {% if disabled %}
+    <div class="alert">
+      Sağlayıcı ekleme kapalı (<code>ALLOW_UI_PROVIDERS=false</code>). Uygulama
+      herkese açık bir sunucuda çalışıyorsa böyle kalmalı.
+    </div>
+  {% endif %}
+  {% if error %}<div class="alert">{{ error }}</div>{% endif %}
+  {% if ok %}<div class="prov-ok">{{ ok }}</div>{% endif %}
+  {% if added_provider %}
+    <div class="prov-ok">
+      <b>{{ added_provider.name }}</b> eklendi · {{ added_provider.models | length }} model.
+      {% if added_provider.hidden_models %}
+        Sunucu {{ added_provider.models | length + added_provider.hidden_models }} model
+        döndürdü, ilk {{ added_provider.models | length }} tanesi alındı. Belirli
+        modeller istiyorsan silip adlarını elle yazarak yeniden ekle.
+      {% endif %}
+    </div>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <div class="prov-head">
+    <h2 style="margin:0">Bu oturumda tanımlı</h2>
+    {% if providers %}
+      <form method="post" action="{{ url_for('main.providers_clear') }}"
+            onsubmit="return confirm('Bütün sağlayıcılar ve anahtarları bellekten silinsin mi?');">
+        <button type="submit" class="btn-secondary">Tümünü sil</button>
+      </form>
+    {% endif %}
+  </div>
+
+  {% if providers %}
+    <div class="prov-grid">
+      {% for p in providers %}
+        <div class="prov-card">
+          <div class="prov-card-top">
+            <div style="min-width:0">
+              <div class="prov-name">{{ p.name }}</div>
+              <div class="mono muted prov-url">{{ p.base_url }}</div>
+            </div>
+            <form method="post" action="{{ url_for('main.providers_delete', provider_id=p.id) }}">
+              <button type="submit" class="btn-secondary prov-del"
+                      title="Sağlayıcıyı ve anahtarını bellekten sil">Sil</button>
+            </form>
+          </div>
+          <div class="prov-meta">
+            <span class="tag">anahtar {{ p.masked_key }}</span>
+            <span class="tag">{{ p.models | length }} model</span>
+          </div>
+          <div class="prov-models">
+            {% for m in p.models[:8] %}<code>{{ m }}</code>{% endfor %}
+            {% if p.models | length > 8 %}<span class="muted">+{{ p.models | length - 8 }}</span>{% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="muted" style="margin:12px 0 0">Henüz sağlayıcı yok.</p>
+  {% endif %}
+</section>
+
+{% if not disabled %}
+<section class="panel">
+  <h2>Yerel model ekle (Ollama)</h2>
+  <p class="muted" style="margin:6px 0 0;max-width:720px">
+    Bilgisayarındaki bir <code>.gguf</code> model dosyasını doğrudan sisteme
+    ekle — LM Studio ya da vLLM gerekmez. Ollama dosyayı kendi deposuna
+    <b>kopyalar</b>, yani modelin bir kopyası daha oluşur (disk alanına dikkat).
+    İşlem dosya boyutuna göre birkaç dakika sürebilir.
+  </p>
+
+  <form method="post" action="{{ url_for('main.providers_ollama_create') }}"
+        class="runform" autocomplete="off" id="ggufForm">
+    <label>Model adı
+      <input type="text" name="name" id="gName" spellcheck="false"
+             placeholder="benim-modelim" required>
+    </label>
+    <label>GGUF dosya yolu
+      <input type="text" name="gguf_path" id="gPath" spellcheck="false"
+             placeholder="C:\Users\...\model.gguf" required>
+      <span class="muted" style="font-size:.75rem">
+        İpucu (Windows): dosyaya Shift + sağ tık → "Yol olarak kopyala" ile yolu alıp buraya yapıştır.
+      </span>
+    </label>
+    <button type="submit" id="gSubmit">Ollama'ya ekle</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Sağlayıcı ekle</h2>
+
+  <div class="prov-presets">
+    {% for pr in presets %}
+      <button type="button" class="prov-preset" data-name="{{ pr.name }}"
+              data-url="{{ pr.base_url }}" data-local="{{ '1' if pr.local else '0' }}">
+        {{ pr.name }}{% if pr.local %} <span class="muted">· lokal</span>{% endif %}
+      </button>
+    {% endfor %}
+  </div>
+
+  <form method="post" action="{{ url_for('main.providers_add') }}" class="runform"
+        autocomplete="off" id="provForm">
+    <label>Ad
+      <input type="text" name="name" id="pName" value="{{ form.name or '' }}"
+             placeholder="Groq" required>
+    </label>
+    <label>Base URL
+      <input type="text" name="base_url" id="pUrl" value="{{ form.base_url or '' }}"
+             placeholder="https://api.groq.com/openai/v1" spellcheck="false" required>
+    </label>
+    <label>API anahtarı
+      <input type="password" name="api_key" id="pKey" autocomplete="new-password"
+             spellcheck="false" placeholder="lokal sunucularda boş bırak">
+      {% if error and form %}
+        <span class="muted" style="font-size:.75rem">Güvenlik için anahtar forma geri yazılmaz, tekrar gir.</span>
+      {% endif %}
+    </label>
+    <label>Modeller <span class="muted">(opsiyonel)</span>
+      <textarea name="models" id="pModels" rows="2" spellcheck="false"
+                placeholder="Boş bırakırsan sunucudan listelenir. Belirli modeller için virgülle yaz.">{{ form.models or '' }}</textarea>
+    </label>
+    <button type="submit" id="pSubmit">Bağlan ve ekle</button>
+  </form>
+</section>
+{% endif %}
+
+{% endblock %}
+{% block scripts %}
+{% if not disabled %}
+<script>
+(function () {
+  const form = document.getElementById('provForm');
+  const name = document.getElementById('pName');
+  const url = document.getElementById('pUrl');
+  const key = document.getElementById('pKey');
+  const models = document.getElementById('pModels');
+
+  document.querySelectorAll('.prov-preset').forEach(btn => {
+    btn.addEventListener('click', () => {
+      name.value = btn.dataset.name;
+      url.value = btn.dataset.url;
+      const local = btn.dataset.local === '1';
+      key.placeholder = local ? 'lokal sunucu, boş bırak' : 'sağlayıcının API anahtarı';
+      (local ? models : key).focus();
+    });
+  });
+
+  // Model discovery can take a few seconds; stop double submits meanwhile.
+  form.addEventListener('submit', () => {
+    const b = document.getElementById('pSubmit');
+    b.disabled = true;
+    b.textContent = 'Bağlanılıyor…';
+  });
+
+  // GGUF import copies gigabytes into Ollama's store — can take minutes.
+  const gForm = document.getElementById('ggufForm');
+  if (gForm) {
+    gForm.addEventListener('submit', () => {
+      const b = document.getElementById('gSubmit');
+      b.disabled = true;
+      b.textContent = 'Ekleniyor… (birkaç dakika sürebilir)';
+    });
+  }
+})();
+</script>
+{% endif %}
+{% endblock %}

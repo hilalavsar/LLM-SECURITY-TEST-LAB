@@ -43,3 +43,11 @@ notebooks/*.ipynb_checkpoints/
 # Loglar
 *.log
 logs/
+
+# Kullanıcının arayüzden eklediği datasetler (saldırı promptları) ve savunma
+# katmanları — makineye özel, yanlışlıkla repoya girmesin
+data/datasets/
+data/defenses/u_*.yaml
+
+# Arayüzden kaldırılan koşuların listesi — bu makinedeki veritabanına ait
+data/archived_runs.txt

@@ -45,6 +45,7 @@ from enum import Enum
 class OwaspCategory(str, Enum):
     LLM01 = "LLM01"  # Prompt Injection
     LLM02 = "LLM02"  # Sensitive Information Disclosure
+    LLM06 = "LLM06"  # Excessive Agency (v0.4: fake tool-use / agent baiting)
     LLM08 = "LLM08"  # Hidden Context Exposure
 
 
@@ -54,6 +55,12 @@ class AttackCategory(str, Enum):
     JAILBREAK_ROLEPLAY = "jailbreak_roleplay"
     OBFUSCATION = "obfuscation"
     INDIRECT_INJECTION = "indirect_injection"
+    # v0.4: modele sahte tool/fonksiyon tanımlayıp çağırtmaya çalışan saldırılar.
+    # Ayrı kategori, çünkü mekanizma persona değil "yetki simülasyonu" (OWASP LLM06).
+    AGENT_MANIPULATION = "agent_manipulation"
+    # Kullanıcının yüklediği, kategorisi belirtilmemiş saldırılar. Varsayılan
+    # bir kategori atamak raporlarda yanlış sınıflandırma olurdu.
+    CUSTOM = "custom"
 
 
 class Language(str, Enum):

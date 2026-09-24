@@ -4,8 +4,6 @@
 
 <section class="panel">
   <h1>Yeni test çalıştır</h1>
-  <p class="muted">Bir model ve savunma seviyesi seç; İngilizce saldırı corpus'u
-     seçtiğin her config'e karşı çalıştırılır ve ASR hesaplanır.</p>
 
   {% if not ollama_up %}
     <div class="alert">⚠️ Ollama daemon'a ulaşılamıyor. Ollama'nın çalıştığından
@@ -26,16 +24,32 @@
       </select>
     </label>
 
+    <label>Saldırı dataset'i
+      <select name="dataset">
+        {% for d in datasets %}
+          <option value="{{ d.id }}" {% if d.id == selected_dataset %}selected{% endif %}>
+            {{ d.name }} · {{ d.count }} saldırı
+          </option>
+        {% endfor %}
+      </select>
+      <span class="muted" style="font-size:.78rem">
+        Kendi saldırılarını <a href="{{ url_for('main.datasets_page') }}">Datasetler</a> sayfasından ekleyebilirsin.
+      </span>
+    </label>
+
     <fieldset>
-      <legend>Savunma seviyeleri (en az bir tanesi)</legend>
+      <legend>Savunma seviyeleri</legend>
+      <p class="muted" style="font-size:.78rem;margin:0 0 8px">
+        Kendi savunma katmanını <a href="{{ url_for('main.defenses_page') }}">Savunmalar</a> sayfasından ekleyebilirsin.
+      </p>
       <div class="cfg-col">
         {% for c in configs %}
           <label class="check config-check">
             <input type="checkbox" name="configs" value="{{ c.name }}" {% if loop.first %}checked{% endif %}>
-            <span>
+            <span style="flex:1;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <span class="cfg-label">{{ c.label }}</span>
-              <span class="cfg-name">{{ c.name }}</span>
-              {% if c.desc %}<span class="cfg-desc">{{ c.desc }}</span>{% endif %}
+              <button type="button" class="cfg-info-btn" data-cfg="cfginfo-{{ loop.index0 }}"
+                      title="Detayı gör (kurallar + tam sistem prompt)">ⓘ</button>
             </span>
           </label>
         {% endfor %}
@@ -65,17 +79,35 @@
 
 <section class="panel">
   <h2>Geçmiş çalıştırmalar</h2>
+
+  {% if archived_count %}
+    <p class="muted" style="font-size:.85rem;margin:-4px 0 14px">
+      {% if show_all %}
+        {{ archived_count }} arşivlenmiş koşu dahil gösteriliyor.
+        <a href="{{ url_for('main.index') }}">Gizle</a>
+      {% else %}
+        {{ archived_count }} eski koşu arşivde — karşılaştırmayı bozmasın diye gizli,
+        veritabanında duruyorlar.
+        <a href="{{ url_for('main.index', all=1) }}">Hepsini göster</a>
+        · kural: <code>data/archived_runs.txt</code>
+      {% endif %}
+    </p>
+  {% endif %}
+
   {% if runs %}
     <table class="runs">
       <thead><tr>
-        <th>Run ID</th><th>Model</th><th>Config'ler</th><th>Judge</th><th></th>
+        <th>Run ID</th><th>Model</th><th>Savunmalar</th><th>Judge</th><th></th>
       </tr></thead>
       <tbody>
       {% for r in runs %}
-        <tr>
+        <tr{% if r.archived %} style="opacity:.55"{% endif %}>
           <td class="mono">{{ r.id }}</td>
-          <td class="mono">{{ r.model }}</td>
-          <td class="mono">{{ r.configs | join(', ') }}</td>
+          <td class="mono">
+            {{ r.model }}
+            {% if r.corpus %}<div class="muted" style="font-size:.72rem">📁 {{ r.corpus_label }}</div>{% endif %}
+          </td>
+          <td class="mono">{{ r.configs | map('savunma') | join(', ') }}</td>
           <td class="mono">
             {% if r.judge_model %}
               <span class="tag mono" title="{{ r.judge_model }}">judge ✓</span>
@@ -83,7 +115,20 @@
               <span class="tag mono" style="color:var(--muted)">yok</span>
             {% endif %}
           </td>
-          <td><a href="{{ url_for('main.dashboard', run_id=r.id) }}">Dashboard →</a></td>
+          <td style="white-space:nowrap">
+            <a href="{{ url_for('main.dashboard', run_id=r.id) }}">Dashboard →</a>
+            {% if r.restorable %}
+              <form method="post" action="{{ url_for('main.run_unarchive', run_id=r.id) }}" style="display:inline">
+                <button type="submit" class="btn-secondary run-mini-btn">↩ Geri getir</button>
+              </form>
+            {% elif not r.archived %}
+              <form method="post" action="{{ url_for('main.run_archive', run_id=r.id) }}" style="display:inline"
+                    onsubmit="return confirm('Bu run listelerden ve karşılaştırmadan kaldırılsın mı? (Silinmez, geri getirilebilir.)');">
+                <input type="hidden" name="back" value="index">
+                <button type="submit" class="btn-secondary run-mini-btn" title="Listeden ve karşılaştırmadan kaldır">✕ Kaldır</button>
+              </form>
+            {% endif %}
+          </td>
         </tr>
       {% endfor %}
       </tbody>
@@ -92,6 +137,32 @@
     <p class="muted">Henüz çalıştırma yok.</p>
   {% endif %}
 </section>
+
+{# ============ Config detay modal ============ #}
+{% for c in configs %}
+  <div class="modal-backdrop" id="cfginfo-{{ loop.index0 }}">
+    <div class="modal-panel" onclick="event.stopPropagation()">
+      <div class="modal-head">
+        <div>
+          <h2>🛡 {{ c.label }}</h2>
+          <p class="muted mono" style="margin:4px 0 0;font-size:.78rem">
+            {{ c.name }}
+          </p>
+        </div>
+        <button class="modal-close" onclick="closeModal('cfginfo-{{ loop.index0 }}')">✕</button>
+      </div>
+
+      <p class="muted" style="margin:0 0 14px">{{ c.desc }}</p>
+
+      <h3 style="margin-top:0">Tam sistem prompt</h3>
+      <pre class="box" style="max-height:420px;overflow-y:auto">{{ c.system_prompt }}</pre>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" onclick="closeModal('cfginfo-{{ loop.index0 }}')">Kapat</button>
+      </div>
+    </div>
+  </div>
+{% endfor %}
 
 {% endblock %}
 {% block scripts %}
@@ -107,5 +178,35 @@
     btn.textContent = 'Başlatılıyor...';
     return true;
   }
+
+  // Config detay modal
+  function openModal(id) {
+    const m = document.getElementById(id);
+    if (m) m.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeModal(id) {
+    const m = document.getElementById(id);
+    if (m) m.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+  document.querySelectorAll('.cfg-info-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openModal(btn.dataset.cfg);
+    });
+  });
+  document.querySelectorAll('.modal-backdrop').forEach(bd => {
+    bd.addEventListener('click', (e) => {
+      if (e.target === bd) closeModal(bd.id);
+    });
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.modal-backdrop.open')
+        .forEach(m => closeModal(m.id));
+    }
+  });
 </script>
 {% endblock %}

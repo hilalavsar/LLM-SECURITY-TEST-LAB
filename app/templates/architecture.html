@@ -17,7 +17,7 @@
 </section>
 
 <section class="panel arch-canvas">
-  <svg viewBox="0 0 900 720" xmlns="http://www.w3.org/2000/svg" role="img"
+  <svg viewBox="0 0 900 820" xmlns="http://www.w3.org/2000/svg" role="img"
        aria-label="Altı katlı izometrik mimari kulesi">
     <defs>
       <!-- soft shadow -->
@@ -43,8 +43,8 @@
     -->
 
     {% set floors = [
-      ('L1', 'Model Runtime',   'Ollama daemon · Gemini API', '#27005D', '#3F0A70'),
-      ('L2', 'Adapter',         'Ollama · Gemini · Base',     '#4A1585', '#602A9A'),
+      ('L1', 'Model Runtime',   'Ollama · Gemini · API providers', '#27005D', '#3F0A70'),
+      ('L2', 'Adapter',         'Ollama · Gemini · OpenAI-compat', '#4A1585', '#602A9A'),
       ('L3', 'Evaluator',       'rules · judge · plain-canary','#7A00D6','#8F2AE0'),
       ('L4', 'Runner',          'threading · DB · orchestrate','#9400FF','#A64DFF'),
       ('L5', 'Web Routes',      'Flask blueprint · REST',     '#B84DFF','#C670FF'),
@@ -53,6 +53,8 @@
 
     {% for l, name, desc, dark, light in floors %}
       {% set y = 570 - loop.index0 * 68 %}
+      {# L6's face colour is too pale for text on the light background #}
+      {% set ink = '#A64DFF' if loop.last else dark %}
       {# Floor group: front (240x60), right side (60x60 with -35 y skew), top (240x60 with -35 y skew) #}
       <g filter="url(#softShadow)" transform="translate(220, {{ y }})">
         <!-- top face (rhombus) -->
@@ -73,7 +75,7 @@
         <!-- label plaque -->
         <rect x="120" y="14" width="110" height="34" fill="#FFFFFF" rx="4" opacity="0.95"/>
         <text x="128" y="28" font-family="JetBrains Mono, monospace" font-size="10"
-              font-weight="700" fill="{{ dark }}">{{ l }}</text>
+              font-weight="700" fill="{{ ink }}">{{ l }}</text>
         <text x="128" y="43" font-family="Inter, sans-serif" font-size="12"
               font-weight="700" fill="#27005D">{{ name }}</text>
 
@@ -84,7 +86,7 @@
 
         <!-- Right-hand text block -->
         <text x="450" y="-10" font-family="Caveat, cursive" font-size="22"
-              font-weight="700" fill="{{ dark }}">{{ name }}</text>
+              font-weight="700" fill="{{ ink }}">{{ name }}</text>
         <text x="450" y="12" font-family="JetBrains Mono, monospace" font-size="10.5"
               fill="#7C6BA0">{{ desc }}</text>
 
@@ -136,21 +138,70 @@
       <line x1="10" y1="58" x2="50" y2="58" stroke="#AED2FF" stroke-width="2"/>
       <line x1="10" y1="68" x2="40" y2="68" stroke="#AED2FF" stroke-width="2"/>
       <text x="30" y="98" text-anchor="middle" font-family="Caveat, cursive"
-            font-size="18" fill="#9400FF" font-weight="700">20 senaryo</text>
+            font-size="18" fill="#9400FF" font-weight="700">52 senaryo</text>
       <text x="30" y="116" text-anchor="middle" font-family="Caveat, cursive"
             font-size="16" fill="#7C6BA0">corpus</text>
     </g>
 
-    <!-- Judge sparkle (right, mid-top) -->
-    <g transform="translate(780, 250)">
-      <circle r="24" fill="#9400FF" opacity="0.15"/>
-      <circle r="14" fill="#9400FF"/>
-      <text y="5" text-anchor="middle" font-family="Inter" font-size="16"
-            font-weight="700" fill="#FFFFFF">⚖</text>
-      <text y="46" text-anchor="middle" font-family="Caveat, cursive"
-            font-size="18" fill="#9400FF" font-weight="700">judge</text>
-      <text y="62" text-anchor="middle" font-family="Caveat, cursive"
-            font-size="15" fill="#7C6BA0">Qwen 3B FT</text>
+    <!-- Judge sparkle kaldırıldı — L3 pointer text'inde ('rules · judge · plain-canary')
+         zaten 'judge' geçiyor, ayrı bir ikon overlap yaratıyordu. -->
+
+
+
+    <!-- Model sources — Stack'in ALTINDA ortalanmış: OLLAMA + GEMINI + API
+         üç kutu, hepsinden L1 katına yukarı doğru okçular. -->
+    <g transform="translate(250, 685)">
+      <text x="143" y="-8" text-anchor="middle" font-family="Caveat, cursive"
+            font-size="20" fill="#9400FF" font-weight="700">üç model kaynağı</text>
+
+      <!-- Local Ollama box (yerel + GGUF içe aktarma) -->
+      <g transform="translate(0, 0)">
+        <rect x="0" y="0" width="78" height="60" fill="#FFFFFF"
+              stroke="#9400FF" stroke-width="1.8" rx="10" filter="url(#softShadow)"/>
+        <text x="39" y="26" text-anchor="middle" font-family="Inter" font-size="20">💻</text>
+        <text x="39" y="46" text-anchor="middle" font-family="JetBrains Mono"
+              font-size="10" font-weight="700" fill="#27005D">OLLAMA</text>
+        <text x="39" y="80" text-anchor="middle" font-family="Caveat, cursive"
+              font-size="15" fill="#7C6BA0">yerel · GGUF</text>
+      </g>
+
+      <!-- Cloud Gemini API box -->
+      <g transform="translate(104, 0)">
+        <rect x="0" y="0" width="78" height="60" fill="#F0E6FF"
+              stroke="#9400FF" stroke-width="1.8" rx="10" filter="url(#softShadow)"/>
+        <text x="39" y="26" text-anchor="middle" font-family="Inter" font-size="20">☁️</text>
+        <text x="39" y="46" text-anchor="middle" font-family="JetBrains Mono"
+              font-size="9" font-weight="700" fill="#27005D">GEMINI</text>
+        <text x="39" y="80" text-anchor="middle" font-family="Caveat, cursive"
+              font-size="15" fill="#7C6BA0">bulut</text>
+      </g>
+
+      <!-- OpenAI-compatible API providers box (Groq, OpenRouter, LM Studio...) -->
+      <g transform="translate(208, 0)">
+        <rect x="0" y="0" width="78" height="60" fill="#F0E6FF"
+              stroke="#9400FF" stroke-width="1.8" rx="10" filter="url(#softShadow)"/>
+        <text x="39" y="26" text-anchor="middle" font-family="Inter" font-size="20">🔌</text>
+        <text x="39" y="46" text-anchor="middle" font-family="JetBrains Mono"
+              font-size="8.5" font-weight="700" fill="#27005D">API PROVIDER</text>
+        <text x="39" y="80" text-anchor="middle" font-family="Caveat, cursive"
+              font-size="15" fill="#7C6BA0">OpenAI-uyumlu</text>
+      </g>
+
+      <!-- Arrows going UP into L1 floor (from each box top) -->
+      <path d="M 39 0 C 39 -28 70 -40 95 -55"
+            stroke="#9400FF" stroke-width="1.6" fill="none"
+            stroke-dasharray="4,4" opacity="0.6"/>
+      <polygon points="95,-55 88,-48 97,-47" fill="#9400FF" opacity="0.6"/>
+
+      <path d="M 143 0 L 143 -55"
+            stroke="#9400FF" stroke-width="1.6" fill="none"
+            stroke-dasharray="4,4" opacity="0.6"/>
+      <polygon points="143,-55 138,-46 148,-46" fill="#9400FF" opacity="0.6"/>
+
+      <path d="M 247 0 C 247 -28 216 -40 191 -55"
+            stroke="#9400FF" stroke-width="1.6" fill="none"
+            stroke-dasharray="4,4" opacity="0.6"/>
+      <polygon points="191,-55 197,-47 189,-48" fill="#9400FF" opacity="0.6"/>
     </g>
   </svg>
 </section>
@@ -164,9 +215,11 @@
     <div class="arch-note">
       <div class="arch-note-layer">L1 · Model Runtime</div>
       <h4>Modelle konuşan tek yer</h4>
-      <p>Ollama (yerel) veya Google Gemini (bulut) API'sine HTTP çağrısı atar,
-        cevabı ham metin olarak döndürür. Runtime seçimi burada bitiyor.</p>
-      <span class="arch-code">POST /api/chat  ·  https://generativelanguage...</span>
+      <p>Üç kaynağa HTTP çağrısı atar: Ollama (yerel, diskteki GGUF'ler dahil),
+        Google Gemini (bulut) ve OpenAI-uyumlu API sağlayıcıları (Groq,
+        OpenRouter, LM Studio…). Kaynaklar arayüzden eklenir; runtime seçimi
+        burada bitiyor.</p>
+      <span class="arch-code">POST /api/chat  ·  /v1/chat/completions  ·  generativelanguage…</span>
     </div>
 
     <div class="arch-note">
@@ -174,8 +227,9 @@
       <h4>Tek arayüz, farklı runtime'lar</h4>
       <p><code>BaseModelAdapter</code> kontratı: <code>generate()</code>,
         <code>chat()</code>. Runner hangi provider'la konuştuğunu bilmez —
-        <code>_make_adapter()</code> factory model adına bakıp seçer.</p>
-      <span class="arch-code">OllamaAdapter · GeminiAdapter</span>
+        factory, model adının önekine (<code>gemini:</code> / <code>api:</code>)
+        bakıp doğru adaptörü seçer.</p>
+      <span class="arch-code">OllamaAdapter · GeminiAdapter · OpenAICompatAdapter</span>
     </div>
 
     <div class="arch-note">

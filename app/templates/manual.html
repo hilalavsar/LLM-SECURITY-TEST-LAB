@@ -23,9 +23,9 @@
         {% for m in models %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
       </select>
     </label>
-    <label>Savunma config
+    <label>Savunma
       <select id="cConfig">
-        {% for c in configs %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+        {% for c in configs %}<option value="{{ c }}">{{ c | savunma }}</option>{% endfor %}
       </select>
     </label>
     <label>Judge modeli
@@ -40,7 +40,7 @@
     </label>
     <button type="button" class="btn-reset" id="cReset">↺ Sohbeti sıfırla</button>
     <p class="muted" style="font-size:.75rem;line-height:1.45;margin:8px 0 0">
-      Model + config'i değiştirmek yeni sohbet başlatmak için sıfırla.
+      Model + savunmayı değiştirmek yeni sohbet başlatmak için sıfırla.
       Judge'ı değiştirmek geçmiş yanıtları etkilemez.
     </p>
   </aside>

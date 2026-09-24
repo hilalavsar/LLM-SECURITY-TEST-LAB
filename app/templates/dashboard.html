@@ -13,9 +13,13 @@
         {% else %}
           judge yok
         {% endif %}
+        · dataset <b>{{ run.corpus_label }}</b>
       </p>
     </div>
-    <a class="btn-secondary" href="{{ url_for('main.index') }}">＋ Yeni test</a>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <a class="btn-secondary" href="{{ url_for('main.dashboard_all', run_id=run.id) }}">🔎 Tüm çıktıları gör</a>
+      <a class="btn-secondary" href="{{ url_for('main.index') }}">＋ Yeni test</a>
+    </div>
   </div>
 
   {# ---------- Top-level stat cards ---------- #}
@@ -24,7 +28,7 @@
       <div class="stat-icon">📋</div>
       <div class="stat-value">{{ totals.cases }}</div>
       <div class="stat-label">Toplam senaryo</div>
-      <div class="stat-sub">{{ run.summary | length }} savunma config</div>
+      <div class="stat-sub">{{ run.summary | length }} savunma seviyesi</div>
     </div>
     <div class="stat-card stat-card--pass">
       <div class="stat-icon">✓</div>
@@ -53,16 +57,18 @@
     </div>
   </div>
 
+  {% include "_asr_explain.html" %}
+
   {# ---------- Per-config ASR chart ---------- #}
-  <h3>Config bazlı ASR</h3>
+  <h3>Savunma bazlı ASR</h3>
   <div class="chart-box"><canvas id="asrChart"></canvas></div>
 
   {# ---------- Per-config mini cards ---------- #}
-  <h3>Config detay</h3>
+  <h3>Savunma detayları</h3>
   <div class="cfg-mini-grid">
     {% for cname, s in run.summary.items() %}
       <div class="cfg-mini">
-        <div class="cfg-mini-name">{{ cname }}</div>
+        <div class="cfg-mini-name">{{ cname | savunma }}</div>
         <div class="cfg-mini-asr">{{ s.asr }}<span>%</span></div>
         <div class="cfg-mini-detail">
           {{ s.fail }}/{{ s.decided }} FAIL
@@ -147,17 +153,70 @@
   </div>
 </section>
 
+<section class="panel" id="raporlar">
+  <h2>📑 Raporlar</h2>
+  <div class="report-grid">
+    <div class="reeval-box">
+      <div class="judge-box-label">1 · Tam rapor</div>
+      <p class="muted" style="font-size:.88rem">
+        Tüm saldırılar, model cevapları ve kararlar tek sayfada. Açılan sayfada
+        <b>🖨 PDF'e yazdır</b> ile indirebilirsin (uzun: her vaka ayrı kart).
+      </p>
+      <a class="btn-secondary" href="{{ url_for('main.dashboard_all', run_id=run.id) }}">📄 Tam raporu aç</a>
+    </div>
+
+    <div class="reeval-box">
+      <div class="judge-box-label">2 · Yapay zeka özeti ve tavsiyeler</div>
+      <p class="muted" style="font-size:.88rem">
+        Seçtiğin model teknik bir bulgu raporu yazar: her saldırı tekniğinin hangi
+        savunma kuralını neden aştığı ve P0/P1/P2 iyileştirme planı. Modele savunma
+        promptları, teknik adları ve değerlendirici gerekçeleri gider; saldırı metinleri
+        ve model cevapları gitmez. Süre: bulut ~1 dk, yerel 3-10 dk.
+      </p>
+      {% if summary_options %}
+        <form method="post" action="{{ url_for('main.ai_summary_create', run_id=run.id) }}"
+              class="reeval-form"
+              onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Özet yazılıyor… (sayfayı kapatma)';">
+          <select name="model">
+            {% for opt in summary_options %}
+              <option value="{{ opt.value }}" {% if opt.value == default_summary %}selected{% endif %}>{{ opt.label }}</option>
+            {% endfor %}
+          </select>
+          <select name="lang" style="flex:0 0 auto;min-width:130px">
+            {% for code, name in summary_langs.items() %}
+              <option value="{{ code }}">{{ name }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit">🤖 Özet oluştur</button>
+        </form>
+      {% else %}
+        <p class="muted">Özet için model yok — Ollama'yı başlat veya Sağlayıcılar'dan bir API ekle.</p>
+      {% endif %}
+      {% if summaries %}
+        <div class="report-links">
+          <span class="muted" style="font-size:.82rem">Bu oturumda yazılanlar:</span>
+          {% for s in summaries %}
+            <a class="tag" href="{{ url_for('main.ai_summary', run_id=run.id, model=s.model, lang=s.lang) }}">
+              {{ s.model.split(':')[-1] }} · {{ s.lang | upper }} · {{ s.created_at[11:] }}
+            </a>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
 <section class="panel">
   <h2>Senaryo sonuçları</h2>
   <table class="results">
     <thead><tr>
-      <th>Config</th><th>ID</th><th>Kategori</th><th>OWASP</th>
+      <th>Savunma</th><th>ID</th><th>Kategori</th><th>OWASP</th>
       <th>Verdict</th><th>Latency</th><th></th>
     </tr></thead>
     <tbody>
     {% for row in run.results %}
       <tr>
-        <td class="mono">{{ row.config }}</td>
+        <td class="mono">{{ row.config | savunma }}</td>
         <td class="mono">{{ row.id }}</td>
         <td>{{ row.category }}</td>
         <td class="mono">{{ row.owasp }}</td>
@@ -197,7 +256,7 @@
         legend: { display: false },
         title: {
           display: true,
-          text: "Attack Success Rate — savunma config'ine göre",
+          text: "Attack Success Rate — savunmaya göre",
           color: "#27005D",
           font: { size: 13, weight: '600' },
         },

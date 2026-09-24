@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Yapay zeka özeti — {{ run.id }}{% endblock %}
+{% block content %}
+
+<section class="panel">
+  <div class="dash-hero">
+    <div class="dash-hero-text">
+      <h1>🤖 Yapay zeka özeti</h1>
+      <p class="mono">
+        run <b>{{ run.id }}</b> · hedef <b>{{ run.model }}</b> ·
+        özetleyen <b>{{ entry.model }}</b> · {{ lang_name }} ·
+        {{ entry.created_at }} · {{ entry.latency_s }} sn
+      </p>
+    </div>
+    <div class="no-print" style="display:flex;gap:10px;flex-wrap:wrap">
+      <a class="btn-secondary" href="{{ url_for('main.dashboard', run_id=run.id) }}">← Dashboard</a>
+      {% if entry.text %}
+        <button type="button" class="btn-secondary" onclick="window.print()">🖨 PDF'e yazdır</button>
+        <a class="btn-secondary"
+           href="{{ url_for('main.ai_summary_download', run_id=run.id, model=entry.model, lang=entry.lang) }}">⬇ Markdown indir</a>
+      {% endif %}
+    </div>
+  </div>
+  {% if entry.error %}
+    <div class="alert">
+      {% if entry.text %}Özet tamamlanmamış olabilir: {% endif %}{{ entry.error }}
+    </div>
+  {% endif %}
+</section>
+
+{% if entry.text %}
+<section class="panel ai-report">
+  {{ body }}
+</section>
+{% elif not entry.error %}
+<section class="panel">
+  <p class="muted">Model boş cevap döndü. Başka bir modelle tekrar dene.</p>
+</section>
+{% endif %}
+
+<p class="muted" style="font-size:.8rem;max-width:760px">
+  Bu özet savunma promptlarından, senaryoların teknik bilgilerinden, seviye bazlı
+  sonuçlardan ve değerlendiricinin gerekçelerinden üretildi; saldırı metinleri ve
+  model cevapları özetleyici modele gönderilmedi.
+  Yapay zeka çıktısıdır — sonuç çıkarmadan önce tam raporla doğrula.
+</p>
+
+{% endblock %}

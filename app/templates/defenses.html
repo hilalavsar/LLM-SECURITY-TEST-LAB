@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Savunmalar — LLM Security Test Lab{% endblock %}
+{% block content %}
+
+<section class="panel">
+  <h1>Savunma katmanları</h1>
+  <p class="muted" style="margin:6px 0 0;max-width:760px">
+    Savunma katmanı, test edilen modele verilen sistem promptudur. Projenin 4
+    varsayılan katmanı değiştirilemez; bunlardan birini kopyalayarak ya da sıfırdan
+    kendi katmanını oluşturabilirsin. Eklediğin katmanlar test formundaki savunma
+    listesinde görünür.
+  </p>
+  <div class="prov-note">
+    <b>Geçmiş sonuçlar güvende:</b> Her test, kullandığı savunma metninin bir
+    kopyasını saklar. Bir katmanı sonradan düzenlemek ya da silmek eski sonuçları ve
+    yapay zeka raporlarını değiştirmez.
+  </div>
+
+  {% if disabled %}
+    <div class="alert">Katman ekleme/düzenleme kapalı (<code>ALLOW_UI_PROVIDERS=false</code>).</div>
+  {% endif %}
+  {% if error %}<div class="alert">{{ error }}</div>{% endif %}
+  {% if ok %}<div class="prov-ok">{{ ok }}</div>{% endif %}
+</section>
+
+<section class="panel">
+  <h2>Katmanlar</h2>
+  <div class="layer-list">
+    {% for l in layers %}
+      <div class="layer-card{% if not l.builtin %} layer-card--user{% endif %}">
+        <div class="layer-head">
+          <div>
+            <b>{{ l.label }}</b>
+            <span class="tag mono" style="margin-left:6px">{{ 'varsayılan' if l.builtin else 'senin' }}</span>
+            <div class="muted mono" style="font-size:.72rem">{{ l.name }}</div>
+          </div>
+          {% if not disabled %}
+            <div class="layer-actions">
+              <button type="button" class="btn-secondary run-mini-btn layer-copy"
+                      data-label="{{ l.label }} (kopya)" data-prompt="{{ l.system_prompt }}">⧉ Kopyala ve düzenle</button>
+              {% if not l.builtin %}
+                <button type="button" class="btn-secondary run-mini-btn layer-edit"
+                        data-name="{{ l.name }}" data-label="{{ l.label }}"
+                        data-prompt="{{ l.system_prompt }}">✎ Düzenle</button>
+                <form method="post" action="{{ url_for('main.defenses_delete', name=l.name) }}" style="display:inline"
+                      onsubmit="return confirm('Bu katman silinsin mi? Onunla yapılmış testlerin sonuçları kalır.');">
+                  <button type="submit" class="btn-secondary run-mini-btn">✕ Sil</button>
+                </form>
+              {% endif %}
+            </div>
+          {% endif %}
+        </div>
+        <p class="muted" style="font-size:.82rem;margin:6px 0">{{ l.desc }}</p>
+        <details>
+          <summary class="muted" style="font-size:.8rem;cursor:pointer">Sistem promptunu göster</summary>
+          <pre class="box" style="margin-top:8px">{{ l.system_prompt }}</pre>
+        </details>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+{% if not disabled %}
+<section class="panel" id="layerFormPanel">
+  <h2 id="layerFormTitle">{{ 'Katmanı düzenle' if form.name else 'Yeni katman' }}</h2>
+  <form method="post" action="{{ url_for('main.defenses_save') }}" class="runform" id="layerForm">
+    <input type="hidden" name="name" id="lName" value="{{ form.name or '' }}">
+    <label>Ad
+      <input type="text" name="label" id="lLabel" maxlength="60" required
+             value="{{ form.label or '' }}" placeholder="Savunma 4 · Benim katmanım">
+    </label>
+    <label>Sistem promptu
+      <textarea name="system_prompt" id="lPrompt" rows="16" spellcheck="false" required
+                class="mono" style="font-size:.82rem"
+                placeholder="Modelin rolü, korunacak gizli değer ({{ canary }}) ve kurallar…">{{ form.system_prompt or '' }}</textarea>
+      <span class="muted" style="font-size:.75rem">
+        Metinde gizli değer <code>{{ canary }}</code> geçmeli; değerlendirme bu değerin sızıp sızmadığına bakar.
+      </span>
+    </label>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button type="submit">💾 Kaydet</button>
+      <button type="button" class="btn-secondary" id="lReset">Yeni katman olarak başla</button>
+    </div>
+  </form>
+</section>
+{% endif %}
+
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  const name = document.getElementById('lName');
+  const label = document.getElementById('lLabel');
+  const prompt = document.getElementById('lPrompt');
+  const title = document.getElementById('layerFormTitle');
+  if (!name) return;
+
+  function fill(n, l, p) {
+    name.value = n;
+    label.value = l;
+    prompt.value = p;
+    title.textContent = n ? 'Katmanı düzenle' : 'Yeni katman';
+    document.getElementById('layerFormPanel').scrollIntoView({behavior: 'smooth'});
+    label.focus();
+  }
+  // Copying always creates a NEW layer (empty name); only "Düzenle" overwrites.
+  document.querySelectorAll('.layer-copy').forEach(b =>
+    b.addEventListener('click', () => fill('', b.dataset.label, b.dataset.prompt)));
+  document.querySelectorAll('.layer-edit').forEach(b =>
+    b.addEventListener('click', () => fill(b.dataset.name, b.dataset.label, b.dataset.prompt)));
+  document.getElementById('lReset').addEventListener('click', () => fill('', '', ''));
+})();
+</script>
+{% endblock %}

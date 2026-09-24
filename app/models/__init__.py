@@ -22,6 +22,13 @@ class Run(Base):
     # Empty string means judge was disabled for this run.
     judge_model: Mapped[str] = mapped_column(String(200), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # Attack dataset id; "" = the built-in corpus (also true for every run
+    # recorded before user datasets existed).
+    corpus: Mapped[str] = mapped_column(String(80), default="")
+    # JSON {config: {"label", "system_prompt"}}: the defense text each config
+    # had when the run executed, so later edits to a user layer never change
+    # what past results say was tested. "" for runs made before this column.
+    defense_snapshot: Mapped[str] = mapped_column(Text, default="")
 
     results: Mapped[list["Result"]] = relationship(
         back_populates="run", cascade="all, delete-orphan", order_by="Result.pk"

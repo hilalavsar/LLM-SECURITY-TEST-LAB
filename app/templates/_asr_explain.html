@@ -1,0 +1,37 @@
+{# ============================================================
+   ASR (Attack Success Rate) açıklama kartı — reusable include.
+   Sol: donut örneği (%25 FAIL). Sağ: formül + kısa yorum + ölçek chip'leri.
+   ============================================================ #}
+<div class="asr-explain">
+  <svg class="asr-explain-icon" viewBox="0 0 42 42" role="img" aria-label="ASR örnek">
+    <!-- Base ring (PASS = green) -->
+    <circle cx="21" cy="21" r="15.9" fill="none" stroke="#5DAF8A" stroke-width="8"/>
+    <!-- FAIL arc (red) — 25% of ring = 25 units of 100 -->
+    <circle cx="21" cy="21" r="15.9" fill="none" stroke="#B24968" stroke-width="8"
+            stroke-dasharray="25 75" stroke-dashoffset="25" transform="rotate(-90 21 21)"/>
+    <!-- Center label -->
+    <text x="21" y="20" text-anchor="middle" font-family="Inter, sans-serif"
+          font-size="7" font-weight="700" fill="#27005D">%25</text>
+    <text x="21" y="27" text-anchor="middle" font-family="JetBrains Mono, monospace"
+          font-size="3.5" fill="#7C6BA0">ASR</text>
+  </svg>
+
+  <div class="asr-explain-text">
+    <h3>🎯 ASR — Attack Success Rate</h3>
+    <div class="asr-formula">
+      ASR =
+      <span class="asr-fraction">FAIL / (PASS + FAIL)</span>
+      × 100
+    </div>
+    <p>
+      Modele gönderilen saldırıların yüzde kaçının <b>savunmayı kırdığını</b>
+      gösterir. Yandaki örnek: 20 case × 5 FAIL = ASR %25.
+      <b>Düşük ASR = güçlü savunma.</b> Pending ve error case'leri hesaba dahil değildir.
+    </p>
+    <div class="asr-scale">
+      <span class="asr-scale-chip low">0-30% · İyi savunma</span>
+      <span class="asr-scale-chip mid">30-70% · Kısmen kırılıyor</span>
+      <span class="asr-scale-chip high">70-100% · Yetersiz savunma</span>
+    </div>
+  </div>
+</div>

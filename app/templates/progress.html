@@ -11,6 +11,10 @@
     <div class="progress-bar" id="bar" style="width:0%"></div>
   </div>
   <p id="label" class="mono">başlatılıyor…</p>
+  <p id="errHelp" class="muted" hidden>
+    API sağlayıcısıyla ilgiliyse <a href="{{ url_for('main.providers_page') }}">Sağlayıcılar</a>
+    sayfasından tekrar ekleyip testi yeniden başlat.
+  </p>
 </section>
 
 {% endblock %}
@@ -23,6 +27,15 @@
       const s = await r.json();
       if (s.status === "done") {
         window.location.href = `/dashboard/${runId}`;
+        return;
+      }
+      if (s.status === "error") {
+        // The worker thread stopped; keep the message visible instead of
+        // polling a run that will never finish.
+        const label = document.getElementById("label");
+        label.textContent = "Koşu durdu: " + (s.error || "bilinmeyen hata");
+        label.classList.add("progress-error");
+        document.getElementById("errHelp").hidden = false;
         return;
       }
       const pct = s.total ? Math.round(100 * s.done / s.total) : 0;

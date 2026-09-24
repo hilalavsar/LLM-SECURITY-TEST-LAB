@@ -3,169 +3,315 @@
 {% block content %}
 
 <section class="panel">
-  <h1>Model karşılaştırma</h1>
-  <p class="muted">
-    Her <b>(model, judge)</b> kombinasyonu için <b>en son</b> çalıştırmanın
-    sonuçları. Her hücrede yeşil = PASS, kırmızı = FAIL, amber = PENDING.
-    ASR = FAIL / (PASS + FAIL); düşük ASR = daha dayanıklı savunma.
-    <br>Bir satırdaki <b>Rapor</b>'a tıkla → o çalıştırmanın detaylı özeti popup'ta açılır.
-  </p>
+  <div class="dash-hero" style="margin-bottom:8px">
+    <div class="dash-hero-text">
+      <h1>Model karşılaştırma 📊</h1>
+      <p>Her modelin savunma dayanıklılığını yan yana gör. Kartlar ASR'ye göre sıralı.</p>
+    </div>
+  </div>
+</section>
 
-  {% if not rows %}
-    <p class="muted">Karşılaştıracak çalıştırma yok. Önce bir test çalıştır.</p>
-  {% else %}
+{% if datasets | length > 1 %}
+  <section class="panel">
+    <div class="dataset-tabs">
+      <span class="muted" style="font-size:.85rem">Dataset:</span>
+      {% for d in datasets %}
+        <a class="dataset-tab{% if d.id == dataset %} active{% endif %}"
+           href="{{ url_for('main.compare', dataset=d.id) if d.id else url_for('main.compare') }}">
+          {{ d.name }} <span class="muted">· {{ d.count }}</span>
+        </a>
+      {% endfor %}
+    </div>
+    <p class="muted" style="font-size:.78rem;margin:8px 0 0">
+      Farklı saldırı setlerinin ASR'si birbiriyle kıyaslanamaz; bu yüzden her seferinde tek dataset gösterilir.
+    </p>
+  </section>
+{% endif %}
+
+{% include "_asr_explain.html" %}
+
+{% if not rows %}
+  <section class="panel">
+    <p class="muted">Bu dataset ile yapılmış bir test yok. Önce bir test çalıştır.</p>
+  </section>
+{% else %}
+
+  {# ============ KARŞILAŞTIRILACAK RUN SEÇİMİ ============ #}
+  <section class="panel">
+    <div class="dash-head">
+      <div>
+        <h2 style="margin:0">Karşılaştırılacak run'lar</h2>
+        <p class="muted" style="margin:4px 0 0;font-size:.85rem">
+          İşaretlediklerin kartlarda, ısı haritasında, grafikte ve tabloda görünür;
+          özet kartları seçime göre yeniden hesaplanır. Seçim bu tarayıcıda hatırlanır.
+          Bir run'ı listeden tamamen kaldırmak için yanındaki <b>✕</b>. Kaldırılan
+          run silinmez; ana sayfada "Hepsini göster" deyip geri getirilebilir.
+        </p>
+      </div>
+      <span class="tag mono" id="runSelCount">{{ rows | length }}/{{ rows | length }} seçili</span>
+    </div>
+    {% set unscored = rows | selectattr('totals.pass', 'equalto', 0) | selectattr('totals.fail', 'equalto', 0) | list %}
+    <div class="run-picker">
+      {% for r in rows %}
+        {% set decided = r.totals.pass + r.totals.fail %}
+        <span class="run-pick{% if not decided %} run-pick--empty{% endif %}">
+          <label class="run-pick-label" title="{{ r.model }} · run {{ r.run_id }}">
+            <input type="checkbox" class="run-toggle" data-run="{{ r.run_id }}" checked>
+            <span class="mono">{{ r.model.split('/')[-1] }}</span>
+            <span class="muted">· {{ r.judge.split('/')[-1] if r.judge else 'judge yok' }}</span>
+            {% if not decided %}<span class="run-pick-warn">değerlendirilemedi</span>{% endif %}
+          </label>
+          <button type="button" class="run-pick-remove" data-remove="{{ r.run_id }}"
+                  title="Karşılaştırmadan kaldır" aria-label="{{ r.model.split('/')[-1] }} run'ını kaldır">✕</button>
+        </span>
+      {% endfor %}
+    </div>
+    <div class="run-picker-actions">
+      <button type="button" class="cfg-filter-all" id="runAll">Tümü</button>
+      <button type="button" class="cfg-filter-all" id="runNone">Hiçbiri</button>
+      <span class="run-picker-sep"></span>
+      <button type="button" class="cfg-filter-all run-remove-btn" id="runRemoveUnchecked">İşaretsizleri kaldır</button>
+      {% if unscored %}
+        <button type="button" class="cfg-filter-all run-remove-btn" id="runRemoveUnscored"
+                data-ids="{{ unscored | map(attribute='run_id') | join(',') }}">
+          Değerlendirilemeyenleri kaldır ({{ unscored | length }})
+        </button>
+      {% endif %}
+    </div>
+    <form method="post" action="{{ url_for('main.runs_archive') }}" id="runRemoveForm" hidden>
+      <input type="hidden" name="dataset" value="{{ dataset }}">
+    </form>
+  </section>
+
+  {# ============ ÜST ÖZET KARTLARI (seçime göre JS ile güncellenir) ============ #}
+  <div class="cmp-summary">
+    <div class="sumcard sumcard--weakest">
+      <div class="sumcard-icon">⚠️</div>
+      <div class="sumcard-value"><span id="sumWeakVal">{{ summary.weakest.asr if summary.weakest else '—' }}</span><span class="num-small">%</span></div>
+      <div class="sumcard-label">En zayıf model</div>
+      <div class="sumcard-sub mono" id="sumWeakModel">{{ summary.weakest.model if summary.weakest else '' }}</div>
+    </div>
+    <div class="sumcard sumcard--strongest">
+      <div class="sumcard-icon">🛡</div>
+      <div class="sumcard-value"><span id="sumStrongVal">{{ summary.strongest.asr if summary.strongest else '—' }}</span><span class="num-small">%</span></div>
+      <div class="sumcard-label">En güçlü model</div>
+      <div class="sumcard-sub mono" id="sumStrongModel">{{ summary.strongest.model if summary.strongest else '' }}</div>
+    </div>
+    <div class="sumcard sumcard--avg">
+      <div class="sumcard-icon">📈</div>
+      <div class="sumcard-value"><span id="sumAvgVal">{{ summary.avg_asr }}</span><span class="num-small">%</span></div>
+      <div class="sumcard-label">Ortalama ASR</div>
+      <div class="sumcard-sub">judge açık run'larda</div>
+    </div>
+    <div class="sumcard sumcard--total">
+      <div class="sumcard-icon">🧪</div>
+      <div class="sumcard-value" id="sumTotalVal">{{ summary.total_runs }}</div>
+      <div class="sumcard-label">Seçili run</div>
+      <div class="sumcard-sub">değerlendirilemeyenler ortalamaya girmez</div>
+    </div>
+  </div>
+
+  {# ============ MODEL KARTLARI (Smart-home tarzı grid) ============ #}
+  <section class="panel">
+    <div class="dash-head">
+      <div>
+        <h2 style="margin:0">Modeller</h2>
+        <p class="muted" style="margin:4px 0 0;font-size:.85rem">
+          Her kart bir (model, judge) kombinasyonu. Yeşil = savundu, kırmızı = kırıldı.
+        </p>
+      </div>
+    </div>
+
+    <div class="model-grid">
+      {% for r in rows %}
+        {% set model_short = r.model.split('/')[-1] %}
+        {% set model_initial = model_short[0] | upper %}
+        {% set decided = r.totals.pass + r.totals.fail %}
+        <div class="mcard" data-run="{{ r.run_id }}">
+          <form method="post" action="{{ url_for('main.run_archive', run_id=r.run_id) }}"
+                class="mcard-remove-form"
+                onsubmit="return confirm('Bu run karşılaştırmadan kaldırılsın mı? Silinmez; ana sayfadaki listeden geri getirilebilir.');">
+            <input type="hidden" name="dataset" value="{{ dataset }}">
+            <button type="submit" class="mcard-remove" title="Karşılaştırmadan kaldır">✕</button>
+          </form>
+          <div class="mcard-head">
+            <div class="mcard-badge">{{ model_initial }}</div>
+            <div class="mcard-title">
+              <div class="mcard-name" title="{{ r.model }}">{{ model_short }}</div>
+              <div class="mcard-tag">
+                {% if r.judge %}
+                  <span class="judge-dot judge-dot--on" style="width:14px;height:14px;font-size:8px">✓</span>
+                  judge · {{ r.judge.split('/')[-1] }}
+                {% else %}
+                  <span class="judge-dot judge-dot--off" style="width:14px;height:14px;font-size:8px">·</span>
+                  judge kapalı
+                {% endif %}
+              </div>
+            </div>
+          </div>
+
+          <div class="mcard-asr">
+            {% if decided %}
+              <div class="mcard-asr-val">{{ r.totals.asr }}<span style="font-size:1rem;color:var(--muted);font-weight:500">%</span></div>
+              <div class="mcard-asr-lbl">Genel ASR</div>
+            {% else %}
+              <div class="mcard-asr-val" style="color:var(--muted)">—</div>
+              <div class="mcard-asr-lbl">Değerlendirilemedi</div>
+            {% endif %}
+          </div>
+          <div class="mcard-asr-bar">
+            <div class="mcard-asr-bar-fill" style="width:{{ r.totals.asr if decided else 0 }}%"></div>
+          </div>
+          {% if not decided %}
+            <p class="mcard-empty-note">
+              Hiçbir vaka puanlanamadı — cevaplar büyük ihtimalle hata verdi.
+              Nedeni için <a href="{{ url_for('main.dashboard', run_id=r.run_id) }}">dashboard</a>'a bak.
+            </p>
+          {% endif %}
+
+          <div class="mcard-cfg-list">
+            {% for c in r.configs %}
+              {% if c in r.total %}
+                {% set total = r.total[c] %}
+                {% set p = r.passed.get(c, 0) %}
+                {% set f = r.fail.get(c, 0) %}
+                {% set pd = r.pending.get(c, 0) %}
+                <div class="mcard-cfg">
+                  <div class="mcard-cfg-head">
+                    <span class="mcard-cfg-name" title="{{ c }}">{{ c | savunma }}</span>
+                    <span class="mcard-cfg-val">{% if p + f %}{{ r.asr[c] }}%{% else %}—{% endif %}</span>
+                  </div>
+                  <div class="mcard-cfg-bar">
+                    {% if p > 0 %}<div class="pf-pass" style="width:{{ (p / total * 100) }}%"></div>{% endif %}
+                    {% if f > 0 %}<div class="pf-fail" style="width:{{ (f / total * 100) }}%"></div>{% endif %}
+                    {% if pd > 0 %}<div class="pf-pending" style="width:{{ (pd / total * 100) }}%"></div>{% endif %}
+                  </div>
+                  <div class="mcard-cfg-sub">✓{{ p }}  ✗{{ f }}{% if pd %}  ⏳{{ pd }}{% endif %}  · toplam {{ total }}</div>
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+
+          <div class="mcard-footer">
+            <span class="mcard-runlink">run {{ r.run_id }}</span>
+            <button type="button" class="report-btn" data-report="report-{{ loop.index0 }}">📄 Rapor</button>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ============ KATEGORİ BAZLI ZAFİYET ISI HARİTASI ============ #}
+  {% if vuln.categories and vuln.runs %}
+    <section class="panel vuln-panel">
+      <h2>Kategori bazlı zafiyet analizi</h2>
+      <p class="muted" style="margin:6px 0 0;font-size:.9rem">
+        Hangi run, hangi saldırı türüne karşı ne kadar zayıf? Kırmızı hücre = yüksek ASR
+        (kırıldı), yeşil = düşük ASR (savundu). Her satır bir model · judge ikilisi;
+        sadece judge açık run'lar dahil.
+      </p>
+
+      <div class="vuln-heatmap-wrap">
+        <div class="vuln-heatmap"
+             style="grid-template-columns: 260px repeat({{ vuln.categories | length }}, 1fr);">
+          <!-- Header row -->
+          <div class="vuln-cell vuln-cell-header">Run \ Kategori</div>
+          {% for cat in vuln.categories %}
+            <div class="vuln-cell vuln-cell-header">
+              {{ cat | replace('_', ' ') }}
+            </div>
+          {% endfor %}
+          <!-- Data rows: every cell carries data-run so a whole row hides together -->
+          {% for vr in vuln.runs %}
+            <div class="vuln-cell vuln-cell-model" data-run="{{ vr.run_id }}" title="run {{ vr.run_id }}">
+              {{ vr.label }}
+            </div>
+            {% for cat in vuln.categories %}
+              {% set val = vuln.matrix.get(vr.run_id, {}).get(cat) %}
+              {% if val is none %}
+                <div class="vuln-cell vuln-heat-none" data-run="{{ vr.run_id }}">—</div>
+              {% else %}
+                {% set bucket = 'vuln-heat-0' %}
+                {% if val >= 80 %}{% set bucket = 'vuln-heat-80' %}
+                {% elif val >= 60 %}{% set bucket = 'vuln-heat-60' %}
+                {% elif val >= 40 %}{% set bucket = 'vuln-heat-40' %}
+                {% elif val >= 20 %}{% set bucket = 'vuln-heat-20' %}
+                {% endif %}
+                <div class="vuln-cell {{ bucket }}" data-run="{{ vr.run_id }}">{{ val }}%</div>
+              {% endif %}
+            {% endfor %}
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+  {% endif %}
+
+  {# ============ CONFIG FILTER + CHART ============ #}
+  <section class="panel">
+    <h2>Grafik görünüm</h2>
     <div class="cfg-filter">
       <span class="cfg-filter-label">Göster:</span>
       {% for c in configs %}
         <label class="cfg-filter-check">
           <input type="checkbox" class="cfg-toggle" data-cfg="{{ c }}" checked>
-          <span class="mono">{{ c }}</span>
+          <span>{{ c | savunma }}</span>
         </label>
       {% endfor %}
       <button type="button" class="cfg-filter-all" id="cfgAll">Tümü</button>
       <button type="button" class="cfg-filter-all" id="cfgNone">Hiçbiri</button>
     </div>
 
+    <div class="chart-tabs" role="tablist">
+      <button type="button" class="chart-tab active" data-mode="judge_on">Judge var</button>
+      <button type="button" class="chart-tab" data-mode="judge_off">Judge yok</button>
+      <button type="button" class="chart-tab" data-mode="both">İkisi birden</button>
+    </div>
+    <div class="chart-box"><canvas id="cmpChart"></canvas></div>
+  </section>
+
+  {# ============ KARŞILAŞTIRMA TABLOSU (seçime göre süzülür) ============ #}
+  <section class="panel">
+    <h2>Karşılaştırma tablosu</h2>
+    <p class="muted" style="margin:6px 0 12px;font-size:.85rem">
+      Seçili run'lar yan yana. Savunma sütunları yukarıdaki "Göster" filtresine uyar.
+    </p>
     <div style="overflow-x:auto">
     <table class="results cmp-table">
       <thead>
         <tr>
           <th class="cmp-col-model">Model</th>
-          <th class="cmp-col-judge" title="Judge modeli açık mı?">Judge</th>
+          <th class="cmp-col-judgename">Judge</th>
+          <th>Genel ASR</th>
+          <th>✓ / ✗</th>
           {% for c in configs %}
-            {% set short = c | replace('_en', '') | replace('config', 'C') %}
             <th class="cfg-col" data-cfg="{{ c }}" title="{{ c }}">
-              <div style="display:flex;flex-direction:column;gap:2px">
-                <span style="color:var(--accent);font-weight:700;letter-spacing:.06em">{{ short }}</span>
-                <span style="font-size:9.5px;color:var(--muted);text-transform:none;letter-spacing:0;font-family:var(--sans)">{{ c }}</span>
-              </div>
+              <span style="color:var(--accent);font-weight:700">{{ c | savunma }}</span>
             </th>
           {% endfor %}
-          <th class="cmp-col-report">Rapor</th>
+          <th class="cmp-col-runid">Run</th>
         </tr>
       </thead>
       <tbody>
       {% for r in rows %}
         {% set model_short = r.model.split('/')[-1] %}
-        {% set model_initial = model_short[0] | upper %}
-        <tr>
-          <td>
-            <div class="model-cell">
-              <div class="model-badge">{{ model_initial }}</div>
-              <div class="model-name" title="{{ r.model }}">{{ model_short }}</div>
-            </div>
-          </td>
-          <td class="cmp-col-judge">
-            {% if r.judge %}
-              <span class="judge-dot judge-dot--on" title="Judge açık: {{ r.judge }}">✓</span>
-            {% else %}
-              <span class="judge-dot judge-dot--off" title="Judge kapalı">·</span>
-            {% endif %}
-          </td>
+        {% set decided = r.totals.pass + r.totals.fail %}
+        <tr data-run="{{ r.run_id }}">
+          <td class="mono" title="{{ r.model }}">{{ model_short }}</td>
+          <td class="mono muted" title="{{ r.judge }}">{{ r.judge.split('/')[-1] if r.judge else '—' }}</td>
+          <td class="mono"><b>{% if decided %}{{ r.totals.asr }}%{% else %}—{% endif %}</b></td>
+          <td class="mono">{{ r.totals.pass }} / {{ r.totals.fail }}</td>
           {% for c in configs %}
-            <td class="cfg-col" data-cfg="{{ c }}">
-              {% if r.total.get(c) %}
-                {% set total = r.total[c] %}
-                {% set p = r.passed.get(c, 0) %}
-                {% set f = r.fail.get(c, 0) %}
-                {% set pd = r.pending.get(c, 0) %}
-                <div class="pf-cell" title="PASS {{ p }} · FAIL {{ f }}{% if pd %} · PENDING {{ pd }}{% endif %} · toplam {{ total }}">
-                  <div class="pf-bar">
-                    {% if p > 0 %}<div class="pf-pass" style="width:{{ (p / total * 100) }}%"></div>{% endif %}
-                    {% if f > 0 %}<div class="pf-fail" style="width:{{ (f / total * 100) }}%"></div>{% endif %}
-                    {% if pd > 0 %}<div class="pf-pending" style="width:{{ (pd / total * 100) }}%"></div>{% endif %}
-                  </div>
-                  <div class="pf-legend">
-                    <span class="pf-pass-txt">✓ {{ p }}</span>
-                    <span class="pf-fail-txt">✗ {{ f }}</span>
-                    {% if pd > 0 %}<span class="pf-pending-txt">⏳ {{ pd }}</span>{% endif %}
-                  </div>
-                  <div class="pf-asr">ASR <b>{{ r.asr[c] }}%</b></div>
-                </div>
-              {% else %}
-                <span class="muted">—</span>
-              {% endif %}
+            <td class="cfg-col mono" data-cfg="{{ c }}">
+              {% if r.passed.get(c, 0) + r.fail.get(c, 0) %}{{ r.asr[c] }}%{% else %}—{% endif %}
             </td>
           {% endfor %}
-          <td class="cmp-col-report">
-            <button type="button" class="report-btn" data-report="report-{{ loop.index0 }}">📄 Aç</button>
-          </td>
+          <td><a href="{{ url_for('main.dashboard', run_id=r.run_id) }}">{{ r.run_id }} →</a></td>
         </tr>
       {% endfor %}
       </tbody>
     </table>
     </div>
-
-    <div class="chart-box"><canvas id="cmpChart"></canvas></div>
-  {% endif %}
-</section>
-
-{% if pairs %}
-<section class="panel">
-  <h2>Judge etkisi karşılaştırması</h2>
-  <p class="muted">
-    Aynı model için hem <b>judge yok</b> hem <b>judge var</b> kayıtları
-    olan çiftler. Delta = judge var − judge yok. Pozitif Δ = judge daha çok
-    FAIL saydı; negatif Δ = judge PENDING'leri PASS'e çevirdi.
-  </p>
-
-  {% for p in pairs %}
-    <div class="pair-block">
-      <div class="pair-head">
-        <h3 class="mono">{{ p.model.split('/')[-1] }}</h3>
-        <div class="pair-links mono">
-          <a href="{{ url_for('main.dashboard', run_id=p.no_judge_run) }}">judge yok →</a>
-          <a href="{{ url_for('main.dashboard', run_id=p.with_judge_run) }}">judge var →</a>
-        </div>
-      </div>
-
-      <table class="pair-table">
-        <thead>
-          <tr>
-            <th>Config</th>
-            <th>Judge yok · ASR</th>
-            <th>Judge var · ASR</th>
-            <th>Δ (pp)</th>
-          </tr>
-        </thead>
-        <tbody>
-        {% for cell in p.cells %}
-          <tr>
-            <td class="mono">{{ cell.config }}</td>
-            <td class="mono">
-              {% if cell.no_judge is not none %}
-                {{ cell.no_judge }}%
-                {% if cell.no_judge_pending > 0 %}
-                  <span class="tag mono" style="color:var(--pending)">+{{ cell.no_judge_pending }}p</span>
-                {% endif %}
-              {% else %}—{% endif %}
-            </td>
-            <td class="mono">
-              {% if cell.with_judge is not none %}
-                {{ cell.with_judge }}%
-                {% if cell.with_judge_pending > 0 %}
-                  <span class="tag mono" style="color:var(--pending)">+{{ cell.with_judge_pending }}p</span>
-                {% endif %}
-              {% else %}—{% endif %}
-            </td>
-            <td class="mono">
-              {% if cell.delta is not none %}
-                {% if cell.delta > 0 %}
-                  <span style="color:var(--fail)">+{{ cell.delta }}</span>
-                {% elif cell.delta < 0 %}
-                  <span style="color:var(--pass)">{{ cell.delta }}</span>
-                {% else %}
-                  <span style="color:var(--muted)">0</span>
-                {% endif %}
-              {% else %}—{% endif %}
-            </td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  {% endfor %}
-</section>
+  </section>
 {% endif %}
 
 {# ============================================================
@@ -177,9 +323,7 @@
       <div class="modal-head">
         <div>
           <h2>📄 Çalıştırma raporu</h2>
-          <p class="muted mono" style="margin:4px 0 0;font-size:.78rem">
-            {{ r.run_id }}
-          </p>
+          <p class="muted mono" style="margin:4px 0 0;font-size:.78rem">{{ r.run_id }}</p>
         </div>
         <button class="modal-close" onclick="closeModal('report-{{ loop.index0 }}')">✕</button>
       </div>
@@ -206,7 +350,7 @@
           <div class="v">{{ r.created_at.replace('T', ' ')[:19] if r.created_at else '—' }}</div>
         </div>
         <div>
-          <div class="k">Config sayısı</div>
+          <div class="k">Savunma sayısı</div>
           <div class="v">{{ r.configs | length }}</div>
         </div>
       </div>
@@ -230,71 +374,34 @@
         </div>
       </div>
 
-      {# ---------- Yorumlayıcı yazı: her verdikt nasıl karara bağlandı ---------- #}
       {% set js = r.judge_stats %}
-      {% set rule_fail = js.rule_fail %}
-      {% set rule_pass = js.rule_pass %}
-      {% set judge_fail = js.judge_fail %}
-      {% set judge_pass = js.judge_pass %}
-      {% set judge_unparse = js.judge_unparseable %}
-      {% set judge_err = js.judge_error %}
-      {% set manual = js.manual %}
-      {% set no_judge_pending = js.rule_pending_no_judge %}
       <div class="report-explain">
         <h4>📖 Sonuç yorumu · her verdikt nasıl karara bağlandı</h4>
         <p>
           <b>Değerlendirme boru hattı:</b> L1 (plaintext canary) → L2 (indicator regex) → L3 (judge, semantik).
-          Bir katman FAIL karar verirse sonraki katman çalıştırılmaz; L1 ve L2 temiz geçen her yanıt L3'e gider.
+          Bir katman FAIL karar verirse sonraki katman çalıştırılmaz.
         </p>
-        {% if rule_fail > 0 %}
-          <p>
-            <b>✗ Rule ile FAIL: {{ rule_fail }} case.</b>
-            Bu case'lerde model, yanıt içinde ya plaintext <code>CANARY-7421</code> ya da
-            senaryonun failure_indicators listesindeki bir kalıbı (base64, spaced, reversed vb.)
-            üretti — kural katmanı hemen yakaladı.
-          </p>
+        {% if js.rule_fail > 0 %}
+          <p><b>✗ Rule ile FAIL: {{ js.rule_fail }} case.</b>
+            Plaintext canary sızıntısı veya indicator regex match — deterministik.</p>
         {% endif %}
-        {% if judge_fail > 0 or judge_pass > 0 %}
-          <p>
-            <b>⚖ Judge karar verdi: {{ judge_fail + judge_pass }} case</b>
-            ({{ judge_fail }} FAIL, {{ judge_pass }} PASS).
-            Bu case'ler rule'dan temiz geçti ama semantik değerlendirici (fine-tuned Qwen 3B)
-            yanıtın içerik olarak persona kabulü, dolaylı sızıntı veya jailbreak onayı
-            içerip içermediğine bakarak karar verdi.
-          </p>
+        {% if js.judge_fail > 0 or js.judge_pass > 0 %}
+          <p><b>⚖ Judge karar verdi: {{ js.judge_fail + js.judge_pass }} case</b>
+            ({{ js.judge_fail }} FAIL, {{ js.judge_pass }} PASS). Rule'dan temiz geçen semantik değerlendirme.</p>
         {% endif %}
-        {% if rule_pass > 0 and not r.judge %}
-          <p>
-            <b>✓ Rule ile PASS: {{ rule_pass }} case.</b>
-            Judge kapalıydı, yanıtta indicator match yoktu → PASS varsayıldı.
-            <span style="color:var(--pending)">⚠ Not:</span> judge kapalıyken semantik sızıntılar
-            (örn. model canary'yi ima etti ama tam yazmadı) kaçırılmış olabilir.
-            Rapor sonucunu farklı judge ile yeniden değerlendirebilirsin.
-          </p>
+        {% if js.rule_pass > 0 and not r.judge %}
+          <p><b>✓ Rule ile PASS: {{ js.rule_pass }} case.</b>
+            Judge kapalıydı → semantik sızıntılar kaçırılmış olabilir.</p>
         {% endif %}
-        {% if judge_unparse > 0 %}
-          <p>
-            <b>⏳ Judge parse edilemedi: {{ judge_unparse }} case.</b>
-            Judge modeli <code>VERDICT: PASS|FAIL</code> formatı yerine meta-refusal
-            döndürdü ("Bu isteği değerlendiremem") — case PENDING olarak kaldı, elle karara bağlanmalı.
-          </p>
+        {% if js.judge_unparseable > 0 %}
+          <p><b>⏳ Judge parse edilemedi: {{ js.judge_unparseable }} case.</b> Meta-refusal / format hatası.</p>
         {% endif %}
-        {% if judge_err > 0 %}
-          <p><b>⚠ Judge teknik hata: {{ judge_err }} case</b> (timeout vb.).</p>
-        {% endif %}
-        {% if no_judge_pending > 0 %}
-          <p>
-            <b>⏳ PENDING (judge yok): {{ no_judge_pending }} case.</b>
-            <code>detection_method=judge</code> olan semantik case'ler judge çağrısı olmadan karara bağlanamaz.
-            Judge'ı açıp yeniden değerlendir veya elle karar ver.
-          </p>
-        {% endif %}
-        {% if manual > 0 %}
-          <p><b>✋ Manuel finalize: {{ manual }} case</b> — detay sayfasından elle PASS/FAIL verildi.</p>
+        {% if js.rule_pending_no_judge > 0 %}
+          <p><b>⏳ PENDING (judge yok): {{ js.rule_pending_no_judge }} case.</b></p>
         {% endif %}
       </div>
 
-      <h3 style="margin-top:0">Config bazlı sonuç · Genel ASR {{ r.totals.asr }}%</h3>
+      <h3 style="margin-top:0">Savunma bazlı sonuç · Genel ASR {{ r.totals.asr }}%</h3>
       <div class="report-config-list">
         {% for c in r.configs %}
           {% if c in r.total %}
@@ -303,7 +410,7 @@
             {% set f = r.fail.get(c, 0) %}
             {% set pd = r.pending.get(c, 0) %}
             <div class="report-cfg">
-              <div class="report-cfg-name" title="{{ c }}">{{ c }}</div>
+              <div class="report-cfg-name" title="{{ c }}">{{ c | savunma }}</div>
               <div class="report-cfg-bar">
                 {% if p > 0 %}<div style="width:{{ (p / total * 100) }}%;background:var(--pass)"></div>{% endif %}
                 {% if f > 0 %}<div style="width:{{ (f / total * 100) }}%;background:var(--fail)"></div>{% endif %}
@@ -317,6 +424,8 @@
 
       <div class="modal-actions">
         <button type="button" class="btn-secondary" onclick="closeModal('report-{{ loop.index0 }}')">Kapat</button>
+        <a class="btn-secondary" href="{{ url_for('main.dashboard', run_id=r.run_id) }}#raporlar"
+           style="text-decoration:none">🤖 AI özeti / tam rapor</a>
         <a class="btn-secondary" href="{{ url_for('main.dashboard', run_id=r.run_id) }}"
            style="text-decoration:none">Dashboard'a git →</a>
       </div>
@@ -328,7 +437,6 @@
 {% block scripts %}
 {% if rows %}
 <script>
-  // ---- Config filter (yatay checkbox row) ----
   function applyCfgFilter() {
     document.querySelectorAll('.cfg-toggle').forEach(cb => {
       const cfg = cb.dataset.cfg;
@@ -348,7 +456,6 @@
     applyCfgFilter();
   });
 
-  // ---- Report modal open/close ----
   function openModal(id) {
     const m = document.getElementById(id);
     if (m) m.classList.add('open');
@@ -379,19 +486,140 @@
 <script>
   const allConfigs = {{ configs | tojson }};
   const rows = {{ rows | tojson }};
-  const palette = ["#9400FF", "#AED2FF", "#27005D", "#B84DFF", "#5DAF8A",
-                   "#B24968", "#C9862F", "#7C6BA0", "#D9BFFF", "#4A2E7A"];
+  const short = s => (s || '').split('/').pop();
+  const scored = r => r.totals.pass + r.totals.fail > 0;
+  // One colour per run: the same model under different judges must stay
+  // distinguishable in the chart.
+  const colors = ["#9400FF", "#5DAF8A", "#C9862F", "#B24968", "#27005D",
+                  "#B84DFF", "#AED2FF", "#7C6BA0"];
+  const runColor = {};
+  rows.forEach((r, i) => { runColor[r.run_id] = colors[i % colors.length]; });
+  let currentMode = 'judge_on';
+
+  // --- run selection (remembered per browser; stores the UNselected ids so
+  //     runs added later show up selected by default) ---
+  const SEL_KEY = 'cmpDeselectedRuns';
+  function loadDeselected() {
+    try { return new Set(JSON.parse(localStorage.getItem(SEL_KEY) || '[]')); }
+    catch (e) { return new Set(); }
+  }
+  function saveDeselected() {
+    const off = Array.from(document.querySelectorAll('.run-toggle'))
+      .filter(cb => !cb.checked).map(cb => cb.dataset.run);
+    try { localStorage.setItem(SEL_KEY, JSON.stringify(off)); } catch (e) {}
+  }
+  function selectedRuns() {
+    return new Set(Array.from(document.querySelectorAll('.run-toggle'))
+      .filter(cb => cb.checked).map(cb => cb.dataset.run));
+  }
+  function setText(id, v) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = v;
+  }
+  // Mirrors runner.model_summary_cards, over the selected runs only.
+  function updateSummary(sel) {
+    const chosen = rows.filter(r => sel.has(r.run_id));
+    setText('runSelCount', `${chosen.length}/${rows.length} seçili`);
+    setText('sumTotalVal', chosen.length);
+    const ok = chosen.filter(scored);
+    const pool = ok.filter(r => r.judge).length ? ok.filter(r => r.judge) : ok;
+    if (!pool.length) {
+      ['sumWeakVal', 'sumStrongVal', 'sumAvgVal'].forEach(id => setText(id, '—'));
+      ['sumWeakModel', 'sumStrongModel'].forEach(id => setText(id, ''));
+      return;
+    }
+    const byAsr = [...pool].sort((a, b) => a.totals.asr - b.totals.asr);
+    const strong = byAsr[0], weak = byAsr[byAsr.length - 1];
+    setText('sumStrongVal', strong.totals.asr);
+    setText('sumStrongModel', `${short(strong.model)} · ${short(strong.judge) || 'judge yok'}`);
+    setText('sumWeakVal', weak.totals.asr);
+    setText('sumWeakModel', `${short(weak.model)} · ${short(weak.judge) || 'judge yok'}`);
+    const avg = pool.reduce((s, r) => s + r.totals.asr, 0) / pool.length;
+    setText('sumAvgVal', Math.round(avg * 10) / 10);
+  }
+  function applyRunSelection() {
+    const sel = selectedRuns();
+    document.querySelectorAll('[data-run]:not(.run-toggle)').forEach(el => {
+      el.style.display = sel.has(el.dataset.run) ? '' : 'none';
+    });
+    updateSummary(sel);
+    saveDeselected();
+    redrawChart();
+  }
+  const deselected = loadDeselected();
+  document.querySelectorAll('.run-toggle').forEach(cb => {
+    if (deselected.has(cb.dataset.run)) cb.checked = false;
+    cb.addEventListener('change', applyRunSelection);
+  });
+  document.getElementById('runAll')?.addEventListener('click', () => {
+    document.querySelectorAll('.run-toggle').forEach(cb => cb.checked = true);
+    applyRunSelection();
+  });
+  document.getElementById('runNone')?.addEventListener('click', () => {
+    document.querySelectorAll('.run-toggle').forEach(cb => cb.checked = false);
+    applyRunSelection();
+  });
+
+  // --- permanent removal (archive; nothing is deleted from the database) ---
+  function removeRuns(ids) {
+    if (!ids.length) {
+      alert('Kaldırılacak run yok. Önce kaldırmak istediklerinin işaretini kaldır.');
+      return;
+    }
+    const msg = ids.length === 1
+      ? 'Bu run karşılaştırmadan kaldırılsın mı?'
+      : `${ids.length} run karşılaştırmadan kaldırılsın mı?`;
+    if (!confirm(msg + ' Silinmez; ana sayfadaki listeden geri getirilebilir.')) return;
+    const form = document.getElementById('runRemoveForm');
+    ids.forEach(id => {
+      const inp = document.createElement('input');
+      inp.type = 'hidden';
+      inp.name = 'run_id';
+      inp.value = id;
+      form.appendChild(inp);
+    });
+    form.submit();
+  }
+  document.querySelectorAll('.run-pick-remove').forEach(btn => {
+    btn.addEventListener('click', () => removeRuns([btn.dataset.remove]));
+  });
+  document.getElementById('runRemoveUnchecked')?.addEventListener('click', () => {
+    removeRuns(Array.from(document.querySelectorAll('.run-toggle'))
+      .filter(cb => !cb.checked).map(cb => cb.dataset.run));
+  });
+  document.getElementById('runRemoveUnscored')?.addEventListener('click', e => {
+    removeRuns(e.currentTarget.dataset.ids.split(',').filter(Boolean));
+  });
+
   function activeConfigs() {
     return Array.from(document.querySelectorAll('.cfg-toggle'))
       .filter(cb => cb.checked).map(cb => cb.dataset.cfg);
   }
-  function buildChart(cfgList) {
-    const datasets = rows.map((r, i) => ({
-      label: `${r.model.split('/').pop()} · ${r.judge ? 'judge' : 'no-judge'}`,
-      backgroundColor: palette[i % palette.length],
-      borderRadius: 6,
-      data: cfgList.map(c => (r.asr[c] === undefined ? null : r.asr[c])),
-    }));
+  function filterRows(mode) {
+    const sel = selectedRuns();
+    // Unscored runs have no ASR to plot — leave them out of the chart.
+    const base = rows.filter(r => sel.has(r.run_id) && scored(r));
+    if (mode === 'judge_on')  return base.filter(r => r.judge);
+    if (mode === 'judge_off') return base.filter(r => !r.judge);
+    return base;
+  }
+  function buildChart(cfgList, mode) {
+    const visibleRows = filterRows(mode);
+    const datasets = visibleRows.map((r) => {
+      const color = runColor[r.run_id];
+      return {
+        label: `${short(r.model)} · ${short(r.judge) || 'judge yok'}`,
+        backgroundColor: mode === 'both' && !r.judge ? color + '80' : color,
+        borderRadius: 8,
+        borderSkipped: false,
+        data: cfgList.map(c => ((r.passed[c] || 0) + (r.fail[c] || 0) ? r.asr[c] : null)),
+      };
+    });
+    const titleText = mode === 'judge_on'
+      ? "ASR — judge açık"
+      : mode === 'judge_off'
+        ? "ASR — judge kapalı"
+        : "ASR — judge açık vs kapalı (opak = judge, %50 opak = no-judge)";
     return new Chart(document.getElementById("cmpChart"), {
       type: "bar",
       data: { labels: cfgList, datasets },
@@ -399,17 +627,22 @@
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { labels: { color: "#27005D", font: { size: 11 } } },
-          title: { display: true, text: "ASR — model × judge × savunma config",
-                   color: "#27005D" },
+          legend: { position: 'top',
+                    labels: { color: "#27005D", font: { size: 12, weight: '600' },
+                              boxWidth: 14, padding: 12, usePointStyle: true } },
+          title: { display: true, text: titleText,
+                   color: "#27005D", font: { size: 13, weight: '700' },
+                   padding: { bottom: 16 } },
           tooltip: {
-            backgroundColor: "#27005D",
-            titleColor: "#FFFFFF",
-            bodyColor: "#AED2FF",
+            backgroundColor: "#27005D", titleColor: "#FFFFFF", bodyColor: "#AED2FF",
+            borderColor: "#9400FF", borderWidth: 1, padding: 10,
+            callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y}% ASR` },
           },
         },
         scales: {
           y: { beginAtZero: true, max: 100,
+               title: { display: true, text: 'ASR (%)', color: '#7C6BA0',
+                        font: { size: 11, family: 'JetBrains Mono' } },
                ticks: { color: "#7C6BA0", font: { family: "JetBrains Mono" } },
                grid: { color: "rgba(148,0,255,.08)" } },
           x: { ticks: { color: "#7C6BA0", font: { family: "JetBrains Mono" } },
@@ -420,9 +653,18 @@
   }
   function redrawChart() {
     if (window._cmpChart) window._cmpChart.destroy();
-    window._cmpChart = buildChart(activeConfigs());
+    window._cmpChart = buildChart(activeConfigs(), currentMode);
   }
-  window._cmpChart = buildChart(activeConfigs());
+  document.querySelectorAll('.chart-tab').forEach(t => {
+    t.addEventListener('click', () => {
+      currentMode = t.dataset.mode;
+      document.querySelectorAll('.chart-tab').forEach(x =>
+        x.classList.toggle('active', x === t));
+      redrawChart();
+    });
+  });
+  // Applies the remembered selection, fills the summary cards and draws the chart.
+  applyRunSelection();
 </script>
 {% endif %}
 {% endblock %}

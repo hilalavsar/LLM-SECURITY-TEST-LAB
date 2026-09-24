@@ -27,6 +27,12 @@ class Settings:
     # Google Gemini API — target model source alongside Ollama. Empty key
     # means Gemini is disabled and won't appear in the target dropdown.
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+    # Sağlayıcılar sayfası (runtime API providers). Keys stay in process memory
+    # only. Set to "false" before exposing the app publicly: the registry is
+    # shared by every visitor and accepts arbitrary base URLs.
+    # Also gates dataset uploads and defense-layer edits: all three let a
+    # visitor write to the server. Set false on any shared/public deployment.
+    ALLOW_UI_PROVIDERS = os.getenv("ALLOW_UI_PROVIDERS", "true").lower() == "true"
     TARGET_MODEL_PRIMARY = os.getenv("TARGET_MODEL_PRIMARY", "qwen2.5:7b")
     TARGET_MODEL_SECONDARY = os.getenv(
         "TARGET_MODEL_SECONDARY", "llama3.1:8b-instruct-q4_K_M"
@@ -53,4 +59,5 @@ class Settings:
     ]
     JUDGE_ENABLED = os.getenv("JUDGE_ENABLED", "true").lower() == "true"
     # Judge is deterministic; num_predict smaller since expected output is short.
-    JUDGE_OPTIONS = {"temperature": 0, "seed": 42, "num_predict": 120}
+    # num_predict 120 → 200: judge REASON cümlesi bazen kesiliyordu, uzattık
+    JUDGE_OPTIONS = {"temperature": 0, "seed": 42, "num_predict": 200}
