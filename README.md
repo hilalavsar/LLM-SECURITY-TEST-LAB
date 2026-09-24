@@ -251,3 +251,6 @@ run.py              Uygulama giriş noktası
 - Bir modelin kullanıcının donanımında çalışıp çalışmayacağını gösteren uyumluluk rozeti
 - Türkçe odaklı modellerin (Trendyol, Cosmos vb.) karşılaştırmaya eklenmesi
 - Corpus'un Türkçe sürümüyle TR/EN savunma farkı analizi
+- PDF,PNG vb. text dışında saldırılar ve savunma katmanı geliştirmesi
+
+NOT: Bu projenin hazırlanmasında Claude Code yapay zeka modelinden çoğunlukla destek alınmıştır.
