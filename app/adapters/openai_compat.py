@@ -38,6 +38,9 @@ class OpenAICompatAdapter(BaseModelAdapter):
         self.model_name = model_name
         self.base_url = base_url.rstrip("/")
         self._api_key = api_key
+        # Seconds without a byte from the server. Enough for one test reply;
+        # the report writer raises it for long answers (see reporter.generate).
+        self.timeout = _TIMEOUT_S
 
     def generate(
         self,
@@ -142,7 +145,7 @@ class OpenAICompatAdapter(BaseModelAdapter):
             headers=_headers(self._api_key),
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=_TIMEOUT_S) as r:
+        with urllib.request.urlopen(req, timeout=self.timeout) as r:
             return json.loads(r.read())
 
 

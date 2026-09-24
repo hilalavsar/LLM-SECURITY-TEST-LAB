@@ -28,7 +28,6 @@ from collections import defaultdict
 from markupsafe import Markup
 
 from app import datasets, defenses, providers, runner
-from app.adapters.ollama import OllamaAdapter
 
 LANGS = {"tr": "Türkçe", "en": "English"}
 
@@ -36,7 +35,10 @@ LANGS = {"tr": "Türkçe", "en": "English"}
 # reasoning; 4096 cut the report mid-section. Models stop at end-of-text well
 # before this cap. num_ctx is Ollama-only: prompt + answer must fit in it.
 _OPTIONS = {"temperature": 0.2, "num_predict": 16384, "num_ctx": 16384}
-_OLLAMA_TIMEOUT_S = 900
+# A full report is ~10x longer than a test reply, and non-streaming APIs send
+# nothing until the whole answer is written; reasoning models (GLM, DeepSeek,
+# Qwen3) can think for minutes first. The adapters' 200 s default cut them off.
+_REPORT_TIMEOUT_S = 900
 _MAX_FIELD_CHARS = 120
 _MAX_DEFENSE_CHARS = 4000
 
@@ -251,14 +253,14 @@ def generate(run: dict, model: str, lang: str) -> dict:
     """Write the summary with `model` and cache it. Raises ProviderError when
     an API provider is not registered in this session."""
     adapter = runner._make_adapter(model)
-    if isinstance(adapter, OllamaAdapter):
-        adapter.timeout = _OLLAMA_TIMEOUT_S
+    if hasattr(adapter, "timeout"):  # Ollama + OpenAI-compatible adapters
+        adapter.timeout = _REPORT_TIMEOUT_S
     res = adapter.generate(
         build_brief(run), system_prompt=_system_prompt(lang), options=dict(_OPTIONS)
     )
     entry = {
         "text": _clean(res.text),
-        "error": providers.redact_known(res.error) if res.error else None,
+        "error": _explain(providers.redact_known(res.error)) if res.error else None,
         "model": model,
         "lang": lang,
         "created_at": time.strftime("%Y-%m-%d %H:%M"),
@@ -267,6 +269,15 @@ def generate(run: dict, model: str, lang: str) -> dict:
     with _LOCK:
         _CACHE[(run["id"], model, lang)] = entry
     return entry
+
+
+def _explain(error: str) -> str:
+    """Put a timeout into words the user can act on; keep other errors as is."""
+    if "timed out" in error.lower():
+        return (f"Model {_REPORT_TIMEOUT_S // 60} dakika içinde cevap vermedi ({error}). "
+                "Düşünen (reasoning) modeller uzun raporda çok yavaş kalabiliyor; "
+                "daha hızlı bir model seçip tekrar deneyin.")
+    return error
 
 
 def get(run_id: str, model: str, lang: str) -> dict | None:
